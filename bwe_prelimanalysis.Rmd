@@ -16,7 +16,7 @@ source("http://faraway.neu.edu/data/Rprofile")
 
 #Importing/wrangling data
 ```{r}
-bwe <- read.csv("bwe_data_04DEC2017.csv") #importing from dropbox
+bwe <- read.csv("bwe_data.csv") #importing from dropbox
 str(bwe)
 
 bwe$rep <- as.factor(bwe$rep)
