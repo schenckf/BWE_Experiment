@@ -9,19 +9,100 @@ output: pdf_document
 ```{r}
 library(dplyr)
 library(sciplot)
-
+library(car)
 ```
 
 #Importing/wrangling data
 ```{r}
-#setwd("~/Dropbox/EEMB Graduate/Research/ZosteraWastingDisease/Diveristy:Warming_Exp_BML/Analyses")
+bwe <- read.csv("bwe_data_04DEC2017.csv") #importing from dropbox
+str(bwe)
 
-#d19SEP1 <- read.csv("bwe_data_19sep2017.csv") #importing from dropbox
-#d03OCT1 <- read.csv("bwe_data_03OCT2017.csv") #importing from dropbox
-d04DEC1 <- read.csv("bwe_data_04DEC2017.csv") #importing from dropbox
-#str(d19SEP1)
-str(d04DEC1)
+bwe$rep <- as.factor(bwe$rep)
+bwe$bin <- as.factor(bwe$bin)
+
+bwe.pot <- bwe %>%
+  group_by(diversity, pot, treatment, bin, rep) %>%
+  summarize(Lprevalence = mean(lesion, na.rm = T), Lseverity = mean(lc.FS, na.rm = T), Cprevalence = mean(cells.present, na.rm = T), Cseverity = mean(cell.mg, na.rm = T))
+
+str(bwe.pot)
+head(bwe.pot)
 ```
+
+#ANALYSES
+##Lesion Prevalence
+```{r}
+#Analyses
+Lprev.model <- aov(Lprevalence ~ diversity * treatment + Error(bin), data = bwe.pot)
+summary(Lprev.model)
+
+#Figure
+bargraph.CI(x.factor = treatment,
+            response = Lprevalence,
+            data = bwe.pot,
+            ylim = c(0,1.1), ylab = "Proportion of shoots with lesions",
+            xlab = "Temperature Treatment", legend = T)
+```
+
+##Lesion severity
+```{r}
+#Analyses
+Lsev.model <- aov(Lseverity ~ diversity * treatment + Error(bin), data = bwe.pot)
+summary(Lsev.model)
+
+#Figure
+bargraph.CI(x.factor = treatment,
+            response = Lseverity,
+            data = bwe.pot,
+            ylim = c(0,10), ylab = "Mean lesion percent cover",
+            xlab = "Temperature Treatment", legend = T)
+```
+
+##Cell Prevalence
+```{r}
+#Analyses
+Cprev.model <- aov(Cprevalence ~ diversity * treatment + Error(bin), data = bwe.pot)
+summary(Cprev.model)
+```
+
+##Cell severity
+```{r}
+#Analyses ##DATA IS NOT NORMALLY DISTRIBUTED?
+Csev.model <- aov(Cseverity ~ diversity * treatment + Error(bin), data = bwe.pot)
+summary(Csev.model)
+
+#checking assumptions
+Csev.model.2 <- aov(Cseverity ~ diversity * treatment + bin, data = bwe.pot)
+summary(Csev.model.2)
+plot(Csev.model.2, 1)
+plot(Csev.model.2, 2)
+plot(Csev.model.2, 5)
+boxCox(Csev.model.2)
+
+bargraph.CI(x.factor = treatment,
+            response = log(Cseverity+1),
+            data = bwe.pot,
+            ylim = c(0,2), ylab = "Log(cells/mg+1)",
+            xlab = "Temperature Treatment", legend = T)
+
+##only for pots with disease -->intensity MODEL INCORRECT
+Cintensity.model <- aov(log(Cseverity + 1) ~ treatment * diversity + Error(bin), data = filter(bwe.pot, Cprevalence > 0))
+summary(Cintensity.model)
+
+#Figure
+bargraph.CI(x.factor = treatment,
+            response = log(Cseverity+1),
+            data = filter(bwe.pot, Cprevalence > 0),
+            ylim = c(0,5), ylab = "Log(cells/mg)",
+            xlab = "Temperature Treatment", legend = T)
+##only for monocultures
+Cintensity.model <- aov(log(Cseverity + 1) ~ treatment + Error(bin), data = filter(bwe.pot, diversity == "mono"))
+summary(Cintensity.model)
+```
+
+
+
+
+
 
 #cell count/mg by genotype, diversity treatment, and temp. treatment
 ```{r}
