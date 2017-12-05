@@ -10,6 +10,8 @@ output: pdf_document
 library(dplyr)
 library(sciplot)
 library(car)
+
+source("http://faraway.neu.edu/data/Rprofile")
 ```
 
 #Importing/wrangling data
@@ -19,6 +21,9 @@ str(bwe)
 
 bwe$rep <- as.factor(bwe$rep)
 bwe$bin <- as.factor(bwe$bin)
+
+bwe$cells.absent <- 1-bwe$cells.present
+bwe$lesion.absent <- 1-bwe$lesion
 
 bwe.pot <- bwe %>%
   group_by(diversity, pot, treatment, bin, rep) %>%
@@ -62,6 +67,13 @@ bargraph.CI(x.factor = treatment,
 #Analyses
 Cprev.model <- aov(Cprevalence ~ diversity * treatment + Error(bin), data = bwe.pot)
 summary(Cprev.model)
+
+bargraph.CI(x.factor = treatment,
+            group = diversity,
+            response = Cprevalence,
+            data = bwe.pot,
+            ylim = c(0,1), ylab = "Proportion of shoots with disease cells",
+            xlab = "Temperature Treatment", legend = T)
 ```
 
 ##Cell severity
@@ -71,17 +83,19 @@ Csev.model <- aov(Cseverity ~ diversity * treatment + Error(bin), data = bwe.pot
 summary(Csev.model)
 
 #checking assumptions
-Csev.model.2 <- aov(Cseverity ~ diversity * treatment + bin, data = bwe.pot)
+Csev.model.2 <- aov(log(Cseverity+1) ~ diversity * treatment + bin, data = bwe.pot)
 summary(Csev.model.2)
 plot(Csev.model.2, 1)
 plot(Csev.model.2, 2)
 plot(Csev.model.2, 5)
 boxCox(Csev.model.2)
 
+#exploratory figure
 bargraph.CI(x.factor = treatment,
+            group = diversity,
             response = log(Cseverity+1),
             data = bwe.pot,
-            ylim = c(0,2), ylab = "Log(cells/mg+1)",
+            ylim = c(0,2), ylab = "disease cells/mg",
             xlab = "Temperature Treatment", legend = T)
 
 ##only for pots with disease -->intensity MODEL INCORRECT
@@ -90,15 +104,83 @@ summary(Cintensity.model)
 
 #Figure
 bargraph.CI(x.factor = treatment,
-            response = log(Cseverity+1),
+            group = diversity,
+            response = Cseverity,
             data = filter(bwe.pot, Cprevalence > 0),
-            ylim = c(0,5), ylab = "Log(cells/mg)",
+            ylim = c(0,1000), ylab = "Log(cells/mg)",
             xlab = "Temperature Treatment", legend = T)
 ##only for monocultures
 Cintensity.model <- aov(log(Cseverity + 1) ~ treatment + Error(bin), data = filter(bwe.pot, diversity == "mono"))
 summary(Cintensity.model)
 ```
 
+##Genotype performance
+```{r}
+##Lesion Prevalence
+genotype.model <- glm(cbind(lesion, lesion.absent) ~ genotype*treatment + bin/pot, data = filter(bwe, diversity == "mono"), family = binomial)
+anova(genotype.model)
+
+mycols.genotype <- cb[c("blue", "grey", "green" , "orange", "pink", "red", "white", "yellow")] #brown = grey, and purple = pink
+mycols.genotype.treatment <- cb[c("blue", "blue", "grey", "grey", "green", "green", "orange", "orange", "pink", "pink", "red", "red", "white", "white", "yellow", "yellow")]
+
+bargraph.CI(x.factor = genotype,
+            response = lesion,
+            data = filter(bwe, diversity == "mono"),
+            ylim = c(0,1.1), ylab = "Proportion of shoots with lesions",
+            xlab = "Genotype", legend = T,
+            col = mycols.genotype)
+
+#Lesion severity
+genotype.model <- aov(lc.FS ~ genotype + bin/pot, data = filter(bwe, diversity == "mono" & lesion > 0))
+summary(genotype.model)
+
+bargraph.CI(x.factor = genotype,
+            response = lc.FS,
+            data = filter(bwe, diversity == "mono" & lesion > 0),
+            ylim = c(0,15), ylab = "Lesion percent cover",
+            xlab = "Genotype", legend = T,
+            col = mycols.genotype)
+
+#Cell prevalence
+genotype.model <- aov(Cprevalence ~ pot + bin/pot, data = filter(bwe.pot, diversity == "mono"))
+summary(genotype.model)
+
+genotype.model <- glm(cbind(lesion, lesion.absent) ~ genotype*treatment + bin/pot, data = filter(bwe, diversity == "mono"), family = binomial)
+anova(genotype.model)
+
+bargraph.CI(x.factor = pot,
+            response = Cprevalence,
+            data = filter(bwe.pot, diversity == "mono"),
+            ylim = c(0,1), ylab = "Proportion of shoots with disease cells",
+            xlab = "Genotype", legend = T,
+            col = mycols.genotype)
+
+#binomial
+genotype.model <- glm(cbind(cells.present, cells.absent) ~ genotype + bin/pot, na.action = na.omit, data = filter(bwe, diversity == "mono"), family = binomial)
+anova(genotype.model, test = "LR")
+
+bargraph.CI(x.factor = genotype,
+            response = cells.present,
+            data = filter(bwe, diversity == "mono"),
+            ylim = c(0,1), ylab = "Proportion of shoots with disease cells",
+            xlab = "Genotype", legend = T,
+            col = mycols.genotype)
+
+#Cell Severity
+genotype.model <- aov(log(Cseverity+1) ~ pot + bin, data = filter(bwe.pot, diversity == "mono"))
+summary(genotype.model)
+
+###INTENSITY
+genotype.model <- aov(log(cell.mg+1) ~ genotype + bin/pot, data = filter(bwe, diversity == "mono", cells.present > 0))
+summary(genotype.model)
+
+bargraph.CI(x.factor = genotype,
+            response = log(cell.mg+1),
+            data = filter(bwe, diversity == "mono", cells.present > 0),
+            ylim = c(0,5), ylab = "log(cells/mg +1)",
+            xlab = "Genotype", legend = T,
+            col = mycols.genotype)
+```
 
 
 
@@ -172,26 +254,26 @@ bargraph.CI(x.factor = treatment,
 
 #cell count per mg by lesion percent cover
 ```{r}
-d04DEC1.intensity <- filter(d04DEC1, cell.mg > 0)
+bwe.intensity <- filter(bwe, cell.mg > 0)
 
-plot(d04DEC1.intensity$lc.FS, log(d04DEC1.intensity$cell.mg+1),
+plot(bwe.intensity$lc.FS, log(bwe.intensity$cell.mg+1),
      xlab = "Lesion percent cover",
      ylab = "Log(cells per mg + 1)",
      main = "Lesion Intensity vs. Cell Intensity",
      ylim = c(0,10),
      xlim = c(0,100))
 
-plot((d04DEC1$lc.FS), log(d04DEC1$cell.mg+1),
+plot(bwe$lc.FS, log(bwe$cell.mg+1),
      xlab = "Lesion percent cover",
      ylab = "Log(cells per mg +1)",
      main = "Lesion % cover vs. Cell count/mg",
      ylim = c(0,10),
-     xlim = c(0,100))
+     xlim = c(0,50))
 ```
 
 #Cell presence (qPCR) vs. lesion presence (visual)
 ```{r}
-table.1 <- table(d04DEC1$lesion, d04DEC1$cells.present)
+table.1 <- table(bwe$lesion, bwe$cells.present)
 
 table.1
 
@@ -200,10 +282,10 @@ xlab = "lesion presence",
            ylab = "cell presence",
            col = T)
 
-table.2 <- table(d04DEC1$lesion.group, d04DEC1$cells.present)
+table.2 <- table(bwe$lesion.group, bwe$cells.present)
 table.2
 
-table.2 <- matrix(c(15,1,25,1,151,23,23,19),ncol=2,byrow=TRUE)
+table.2 <- matrix(c(20,0,41,1,206,33,25,22),ncol=2,byrow=TRUE)
 colnames(table.2) <- c("absent","present")
 rownames(table.2) <- c("0","<1","<10",">10")
 table.2 <- as.table(table.2)
