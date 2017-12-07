@@ -10,6 +10,7 @@ output: pdf_document
 library(dplyr)
 library(sciplot)
 library(car)
+library(lme4)
 
 source("http://faraway.neu.edu/data/Rprofile")
 ```
@@ -27,7 +28,10 @@ bwe$lesion.absent <- 1-bwe$lesion
 
 bwe.pot <- bwe %>%
   group_by(diversity, pot, treatment, bin, rep) %>%
-  summarize(Lprevalence = mean(lesion, na.rm = T), Lseverity = mean(lc.FS, na.rm = T), Cprevalence = mean(cells.present, na.rm = T), Cseverity = mean(cell.mg, na.rm = T))
+  summarize(Lprevalence = mean(lesion, na.rm = T), Lpresent = sum(lesion, na.rm = T), Labsent = sum(lesion.absent, na.rm = T), Lseverity = mean(lc.FS, na.rm = T), Cprevalence = mean(cells.present, na.rm = T), Cpresent = sum(cells.present, na.rm = T), Cabsent = sum(cells.absent, na.rm = T), Cseverity = mean(cell.mg, na.rm = T))
+
+bwe.pot$Lpresent <- as.numeric(bwe.pot$Lpresent)
+bwe.pot$Cpresent  <- as.numeric(bwe.pot$Cpresent)
 
 str(bwe.pot)
 head(bwe.pot)
@@ -37,8 +41,8 @@ head(bwe.pot)
 ##Lesion Prevalence
 ```{r}
 #Analyses
-Lprev.model <- aov(Lprevalence ~ diversity * treatment + Error(bin), data = bwe.pot)
-summary(Lprev.model)
+Lprev.model <- glm(cbind(Lpresent, Labsent) ~ diversity * treatment, family = binomial, data = bwe.pot)
+summary(Lprev.model) ### not working
 
 #Figure
 bargraph.CI(x.factor = treatment,
@@ -65,7 +69,7 @@ bargraph.CI(x.factor = treatment,
 ##Cell Prevalence
 ```{r}
 #Analyses
-Cprev.model <- aov(Cprevalence ~ diversity * treatment + Error(bin), data = bwe.pot)
+Cprev.model <-  glm(cbind(Cpresent, Cabsent) ~ diversity * treatment, family = binomial, data = bwe.pot)
 summary(Cprev.model)
 
 bargraph.CI(x.factor = treatment,
