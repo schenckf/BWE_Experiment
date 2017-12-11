@@ -42,7 +42,9 @@ head(bwe.pot)
 ```{r}
 #Analyses
 Lprev.model <- glm(cbind(Lpresent, Labsent) ~ diversity * treatment, family = binomial, data = bwe.pot)
-summary(Lprev.model) ### not working
+summary(Lprev.model)
+Anova(Lprev.model) ##use this for P values (package = car)
+###not working when trying to account for nested experimental design, glmer with (1|bin)?
 
 #Figure
 bargraph.CI(x.factor = treatment,
@@ -56,7 +58,10 @@ bargraph.CI(x.factor = treatment,
 ```{r}
 #Analyses
 Lsev.model <- aov(Lseverity ~ diversity * treatment + Error(bin), data = bwe.pot)
-summary(Lsev.model)
+summary(Lsev.model) 
+
+Lsev.model2 <- aov(Lseverity ~ diversity * treatment, data = bwe.pot)
+plot(Lsev.model2) #distribution looks ok
 
 #Figure
 bargraph.CI(x.factor = treatment,
@@ -64,6 +69,19 @@ bargraph.CI(x.factor = treatment,
             data = bwe.pot,
             ylim = c(0,10), ylab = "Mean lesion percent cover",
             xlab = "Temperature Treatment", legend = T)
+
+##only for pots with disease -->intensity MODEL INCORRECT
+Lintensity.model <- aov(Lseverity ~ treatment * diversity, data = filter(bwe.pot, Lprevalence > 0))
+summary(Lintensity.model)
+plot(Lintensity.model)
+
+#Figure
+bargraph.CI(x.factor = treatment,
+            response = Lseverity,
+            data = filter(bwe.pot, Cprevalence > 0),
+            ylim = c(0,20), ylab = "Mean lesion percent cover",
+            xlab = "Temperature Treatment", legend = T)
+
 ```
 
 ##Cell Prevalence
@@ -83,8 +101,14 @@ bargraph.CI(x.factor = treatment,
 ##Cell severity
 ```{r}
 #Analyses ##DATA IS NOT NORMALLY DISTRIBUTED?
-Csev.model <- aov(Cseverity ~ diversity * treatment + Error(bin), data = bwe.pot)
-summary(Csev.model)
+#Csev.model <- aov(Cseverity ~ diversity * treatment + Error(bin), data = bwe.pot)
+#summary(Csev.model)
+
+#standard poisson glm
+summary(Csev.model <- glm(Cseverity ~ diversity * treatment, family = poisson, data = bwe.pot))
+
+#Zero inflated glm
+#Poisson glm or negative binomial (start with poisson)
 
 #checking assumptions
 Csev.model.2 <- aov(log(Cseverity+1) ~ diversity * treatment + bin, data = bwe.pot)
@@ -97,13 +121,13 @@ boxCox(Csev.model.2)
 #exploratory figure
 bargraph.CI(x.factor = treatment,
             group = diversity,
-            response = log(Cseverity+1),
+            response = Cseverity+1,
             data = bwe.pot,
-            ylim = c(0,2), ylab = "disease cells/mg",
+            ylim = c(0,1000), ylab = "disease cells/mg",
             xlab = "Temperature Treatment", legend = T)
 
 ##only for pots with disease -->intensity MODEL INCORRECT
-Cintensity.model <- aov(log(Cseverity + 1) ~ treatment * diversity + Error(bin), data = filter(bwe.pot, Cprevalence > 0))
+Cintensity.model <- glm(Cseverity ~ treatment * diversity, family = poisson, data = filter(bwe.pot, Cprevalence > 0))
 summary(Cintensity.model)
 
 #Figure
@@ -111,7 +135,7 @@ bargraph.CI(x.factor = treatment,
             group = diversity,
             response = Cseverity,
             data = filter(bwe.pot, Cprevalence > 0),
-            ylim = c(0,1000), ylab = "Log(cells/mg)",
+            ylim = c(0,1000), ylab = "cells/mg",
             xlab = "Temperature Treatment", legend = T)
 ##only for monocultures
 Cintensity.model <- aov(log(Cseverity + 1) ~ treatment + Error(bin), data = filter(bwe.pot, diversity == "mono"))
