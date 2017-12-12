@@ -106,34 +106,33 @@ bargraph.CI(x.factor = treatment,
 #Analyses ##DATA IS NOT NORMALLY DISTRIBUTED?
 #Csev.model <- aov(Cseverity ~ diversity * treatment + Error(bin), data = bwe.pot)
 #summary(Csev.model)
-
-#standard poisson glm
-Anova(Csev.model <- glm(Cseverity.round ~ diversity * treatment, family = poisson, data = bwe.pot))
-
-#Zero inflated glm
-#Poisson glm or negative binomial (start with poisson)
-
 #checking assumptions
-#Csev.model.2 <- aov(log(Cseverity+1) ~ diversity * treatment + bin, data = bwe.pot)
+#Csev.model.2 <- aov(Cseverity ~ diversity * treatment, data = bwe.pot)
 #summary(Csev.model.2)
 #plot(Csev.model.2, 1)
 #plot(Csev.model.2, 2)
 #plot(Csev.model.2, 5)
 #boxCox(Csev.model.2)
 
-#exploratory figure
+
+#standard poisson glm with rounded cell/mg values
+Anova(Csev.model <- glm(Cseverity.round ~ diversity * treatment, family = poisson, data = bwe.pot))
+#exploratory figures
 bargraph.CI(x.factor = treatment,
-            group = diversity,
             response = Cseverity.round,
             data = bwe.pot,
-            ylim = c(0,1000), ylab = "disease cells/mg",
+            ylim = c(0,500), ylab = "disease cells/mg",
             xlab = "Temperature Treatment", legend = T)
+bargraph.CI(x.factor = diversity,
+            response = Cseverity.round,
+            data = bwe.pot,
+            ylim = c(0,500), ylab = "disease cells/mg",
+            xlab = "Diversity", legend = T)
 
 ##only for pots with disease -->intensity MODEL INCORRECT
 Cintensity.model <- glm(Cseverity.round ~ treatment * diversity, family = poisson, data = filter(bwe.pot, Cprevalence > 0))
 summary(Cintensity.model)
 Anova(Cintensity.model)
-
 #Figure
 bargraph.CI(x.factor = treatment,
             group = diversity,
@@ -141,9 +140,13 @@ bargraph.CI(x.factor = treatment,
             data = filter(bwe.pot, Cprevalence > 0),
             ylim = c(0,1000), ylab = "cells/mg",
             xlab = "Temperature Treatment", legend = T)
+
 ##only for monocultures
-Cintensity.model <- aov(log(Cseverity + 1) ~ treatment + Error(bin), data = filter(bwe.pot, diversity == "mono"))
-summary(Cintensity.model)
+#Cintensity.model <- aov(log(Cseverity + 1) ~ treatment + Error(bin), data = filter(bwe.pot, diversity == "mono"))
+#summary(Cintensity.model)
+
+#Zero inflated glm
+#Poisson glm or negative binomial (start with poisson)
 ```
 
 ##Genotype performance
