@@ -33,6 +33,8 @@ bwe.pot <- bwe %>%
 bwe.pot$Lpresent <- as.numeric(bwe.pot$Lpresent)
 bwe.pot$Cpresent  <- as.numeric(bwe.pot$Cpresent)
 
+bwe.pot$Cseverity.round <- ceiling(bwe.pot$Cseverity) #rounding Cseverity to nearest integer > than Cseverity value
+
 str(bwe.pot)
 head(bwe.pot)
 ```
@@ -41,8 +43,10 @@ head(bwe.pot)
 ##Lesion Prevalence
 ```{r}
 #Analyses
-Lprev.model <- glm(cbind(Lpresent, Labsent) ~ diversity * treatment, family = binomial, data = bwe.pot)
-summary(Lprev.model) ### not working
+Lprev.model <- glm(cbind(Lpresent, Labsent) ~ diversity * treatment + treatment/rep, family = binomial, data = bwe.pot)
+summary(Lprev.model)
+Anova(Lprev.model) ##use this for P values (package = car)
+###not working when trying to account for nested experimental design, glmer with (1|bin)?
 
 #Figure
 bargraph.CI(x.factor = treatment,
@@ -56,7 +60,10 @@ bargraph.CI(x.factor = treatment,
 ```{r}
 #Analyses
 Lsev.model <- aov(Lseverity ~ diversity * treatment + Error(bin), data = bwe.pot)
-summary(Lsev.model)
+summary(Lsev.model) 
+
+Lsev.model2 <- aov(Lseverity ~ diversity * treatment, data = bwe.pot)
+plot(Lsev.model2) #distribution looks ok
 
 #Figure
 bargraph.CI(x.factor = treatment,
@@ -64,6 +71,19 @@ bargraph.CI(x.factor = treatment,
             data = bwe.pot,
             ylim = c(0,10), ylab = "Mean lesion percent cover",
             xlab = "Temperature Treatment", legend = T)
+
+##only for pots with disease -->intensity MODEL INCORRECT
+Lintensity.model <- aov(Lseverity ~ treatment * diversity, data = filter(bwe.pot, Lprevalence > 0))
+summary(Lintensity.model)
+plot(Lintensity.model)
+
+#Figure
+bargraph.CI(x.factor = treatment,
+            response = Lseverity,
+            data = filter(bwe.pot, Cprevalence > 0),
+            ylim = c(0,20), ylab = "Mean lesion percent cover",
+            xlab = "Temperature Treatment", legend = T)
+
 ```
 
 ##Cell Prevalence
@@ -71,6 +91,7 @@ bargraph.CI(x.factor = treatment,
 #Analyses
 Cprev.model <-  glm(cbind(Cpresent, Cabsent) ~ diversity * treatment, family = binomial, data = bwe.pot)
 summary(Cprev.model)
+Anova(Cprev.model)
 
 bargraph.CI(x.factor = treatment,
             group = diversity,
@@ -83,39 +104,49 @@ bargraph.CI(x.factor = treatment,
 ##Cell severity
 ```{r}
 #Analyses ##DATA IS NOT NORMALLY DISTRIBUTED?
-Csev.model <- aov(Cseverity ~ diversity * treatment + Error(bin), data = bwe.pot)
-summary(Csev.model)
-
+#Csev.model <- aov(Cseverity ~ diversity * treatment + Error(bin), data = bwe.pot)
+#summary(Csev.model)
 #checking assumptions
-Csev.model.2 <- aov(log(Cseverity+1) ~ diversity * treatment + bin, data = bwe.pot)
-summary(Csev.model.2)
-plot(Csev.model.2, 1)
-plot(Csev.model.2, 2)
-plot(Csev.model.2, 5)
-boxCox(Csev.model.2)
+#Csev.model.2 <- aov(Cseverity ~ diversity * treatment, data = bwe.pot)
+#summary(Csev.model.2)
+#plot(Csev.model.2, 1)
+#plot(Csev.model.2, 2)
+#plot(Csev.model.2, 5)
+#boxCox(Csev.model.2)
 
-#exploratory figure
+
+#standard poisson glm with rounded cell/mg values
+Anova(Csev.model <- glm(Cseverity.round ~ diversity * treatment, family = poisson, data = bwe.pot))
+#exploratory figures
 bargraph.CI(x.factor = treatment,
-            group = diversity,
-            response = log(Cseverity+1),
+            response = Cseverity.round,
             data = bwe.pot,
-            ylim = c(0,2), ylab = "disease cells/mg",
+            ylim = c(0,500), ylab = "disease cells/mg",
             xlab = "Temperature Treatment", legend = T)
+bargraph.CI(x.factor = diversity,
+            response = Cseverity.round,
+            data = bwe.pot,
+            ylim = c(0,500), ylab = "disease cells/mg",
+            xlab = "Diversity", legend = T)
 
 ##only for pots with disease -->intensity MODEL INCORRECT
-Cintensity.model <- aov(log(Cseverity + 1) ~ treatment * diversity + Error(bin), data = filter(bwe.pot, Cprevalence > 0))
+Cintensity.model <- glm(Cseverity.round ~ treatment * diversity, family = poisson, data = filter(bwe.pot, Cprevalence > 0))
 summary(Cintensity.model)
-
+Anova(Cintensity.model)
 #Figure
 bargraph.CI(x.factor = treatment,
             group = diversity,
-            response = Cseverity,
+            response = Cseverity.round,
             data = filter(bwe.pot, Cprevalence > 0),
-            ylim = c(0,1000), ylab = "Log(cells/mg)",
+            ylim = c(0,1000), ylab = "cells/mg",
             xlab = "Temperature Treatment", legend = T)
+
 ##only for monocultures
-Cintensity.model <- aov(log(Cseverity + 1) ~ treatment + Error(bin), data = filter(bwe.pot, diversity == "mono"))
-summary(Cintensity.model)
+#Cintensity.model <- aov(log(Cseverity + 1) ~ treatment + Error(bin), data = filter(bwe.pot, diversity == "mono"))
+#summary(Cintensity.model)
+
+#Zero inflated glm
+#Poisson glm or negative binomial (start with poisson)
 ```
 
 ##Genotype performance
