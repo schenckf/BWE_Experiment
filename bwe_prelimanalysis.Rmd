@@ -43,8 +43,15 @@ head(bwe.pot)
 ##Lesion Prevalence
 ```{r}
 #Analyses
-Lprev.model <- glm(cbind(Lpresent, Labsent) ~ diversity * treatment + treatment/rep, family = binomial, data = bwe.pot)
-summary(Lprev.model)
+Lprev.model <-  glm(cbind(Lpresent, Labsent) ~ treatment + treatment:diversity, family = binomial, data = bwe.pot)
+
+Lprev.model <- glm(cbind(Lpresent, Labsent) ~ treatment/diversity, family = binomial, data = bwe.pot)
+
+Lprev.model <- glm(cbind(Lpresent, Labsent) ~ treatment + diversity %in% treatment, family = binomial, data = bwe.pot)
+
+anova(Lprev.model, test = "LR")
+
+
 Anova(Lprev.model) ##use this for P values (package = car)
 ###not working when trying to account for nested experimental design, glmer with (1|bin)?
 
@@ -89,8 +96,14 @@ bargraph.CI(x.factor = treatment,
 ##Cell Prevalence
 ```{r}
 #Analyses
-Cprev.model <-  glm(cbind(Cpresent, Cabsent) ~ diversity * treatment, family = binomial, data = bwe.pot)
-summary(Cprev.model)
+Cprev.model <-  glm(cbind(Cpresent, Cabsent) ~ treatment + treatment:diversity, family = binomial, data = bwe.pot)
+
+Cprev.model <- glm(cbind(Cpresent, Cabsent) ~ treatment/diversity, family = binomial, data = bwe.pot)
+
+Cprev.model <- glm(cbind(Cpresent, Cabsent) ~ treatment + diversity %in% treatment, family = binomial, data = bwe.pot)
+
+anova(Cprev.model, test = "LR")
+
 Anova(Cprev.model)
 
 bargraph.CI(x.factor = treatment,
@@ -104,19 +117,14 @@ bargraph.CI(x.factor = treatment,
 ##Cell severity
 ```{r}
 #Analyses ##DATA IS NOT NORMALLY DISTRIBUTED?
-#Csev.model <- aov(Cseverity ~ diversity * treatment + Error(bin), data = bwe.pot)
-#summary(Csev.model)
-#checking assumptions
-#Csev.model.2 <- aov(Cseverity ~ diversity * treatment, data = bwe.pot)
-#summary(Csev.model.2)
-#plot(Csev.model.2, 1)
-#plot(Csev.model.2, 2)
-#plot(Csev.model.2, 5)
-#boxCox(Csev.model.2)
+Csev.model <- glm(Cseverity ~ treatment/diversity, family = poisson, data = bwe.pot)
+
+Anova(Csev.model)
+anova(Csev.model, test = "LR")
 
 
 #standard poisson glm with rounded cell/mg values
-Anova(Csev.model <- glm(Cseverity.round ~ diversity * treatment, family = poisson, data = bwe.pot))
+Anova(Csev.model <- glm(Cseverity.round ~ treatment/diversity, family = poisson, data = bwe.pot))
 #exploratory figures
 bargraph.CI(x.factor = treatment,
             response = Cseverity.round,
@@ -130,8 +138,7 @@ bargraph.CI(x.factor = diversity,
             xlab = "Diversity", legend = T)
 
 ##only for pots with disease -->intensity MODEL INCORRECT
-Cintensity.model <- glm(Cseverity.round ~ treatment * diversity, family = poisson, data = filter(bwe.pot, Cprevalence > 0))
-summary(Cintensity.model)
+Cintensity.model <- glm(Cseverity.round ~ treatment/diversity, family = poisson, data = filter(bwe.pot, Cprevalence > 0))
 Anova(Cintensity.model)
 #Figure
 bargraph.CI(x.factor = treatment,
@@ -140,10 +147,6 @@ bargraph.CI(x.factor = treatment,
             data = filter(bwe.pot, Cprevalence > 0),
             ylim = c(0,1000), ylab = "cells/mg",
             xlab = "Temperature Treatment", legend = T)
-
-##only for monocultures
-#Cintensity.model <- aov(log(Cseverity + 1) ~ treatment + Error(bin), data = filter(bwe.pot, diversity == "mono"))
-#summary(Cintensity.model)
 
 #Zero inflated glm
 #Poisson glm or negative binomial (start with poisson)
