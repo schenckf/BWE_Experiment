@@ -43,17 +43,15 @@ head(bwe.pot)
 ##Lesion Prevalence
 ```{r}
 #Analyses
-Lprev.model <-  glm(cbind(Lpresent, Labsent) ~ treatment + treatment:diversity, family = binomial, data = bwe.pot)
+#Lprev.model <-  glm(cbind(Lpresent, Labsent) ~ treatment + treatment:diversity, family = binomial, data = bwe.pot)
 
-Lprev.model <- glm(cbind(Lpresent, Labsent) ~ treatment/diversity, family = binomial, data = bwe.pot)
+#Lprev.model <- glm(cbind(Lpresent, Labsent) ~ treatment/diversity, family = binomial, data = bwe.pot)
 
-Lprev.model <- glm(cbind(Lpresent, Labsent) ~ treatment + diversity %in% treatment, family = binomial, data = bwe.pot)
+Lprev.model <- glmer(cbind(Lpresent, Labsent) ~ treatment * diversity + (1|bin), family = binomial, data = bwe.pot) #random effects model
 
 anova(Lprev.model, test = "LR")
 
-
 Anova(Lprev.model) ##use this for P values (package = car)
-###not working when trying to account for nested experimental design, glmer with (1|bin)?
 
 #Figure
 bargraph.CI(x.factor = treatment,
@@ -67,7 +65,12 @@ bargraph.CI(x.factor = treatment,
 ```{r}
 #Analyses
 Lsev.model <- aov(Lseverity ~ diversity * treatment + Error(bin), data = bwe.pot)
-summary(Lsev.model) 
+summary(Lsev.model)
+
+Lsev.model <- glmer(Lseverity ~ diversity * treatment + (1|bin), family = gaussian, data = bwe.pot) #checking to see if glmer formula structure correct
+anova(Lsev.model)
+
+
 
 Lsev.model2 <- aov(Lseverity ~ diversity * treatment, data = bwe.pot)
 plot(Lsev.model2) #distribution looks ok
@@ -96,18 +99,17 @@ bargraph.CI(x.factor = treatment,
 ##Cell Prevalence
 ```{r}
 #Analyses
-Cprev.model <-  glm(cbind(Cpresent, Cabsent) ~ treatment + treatment:diversity, family = binomial, data = bwe.pot)
+#Cprev.model <-  glm(cbind(Cpresent, Cabsent) ~ treatment + treatment:diversity, family = binomial, data = bwe.pot)
 
-Cprev.model <- glm(cbind(Cpresent, Cabsent) ~ treatment/diversity, family = binomial, data = bwe.pot)
+#Cprev.model <- glm(cbind(Cpresent, Cabsent) ~ treatment/diversity, family = binomial, data = bwe.pot)
 
-Cprev.model <- glm(cbind(Cpresent, Cabsent) ~ treatment + diversity %in% treatment, family = binomial, data = bwe.pot)
+Cprev.model <- glmer(cbind(Cpresent, Cabsent) ~ treatment * diversity + (1|bin), family = binomial, data = bwe.pot)
 
 anova(Cprev.model, test = "LR")
 
 Anova(Cprev.model)
 
 bargraph.CI(x.factor = treatment,
-            group = diversity,
             response = Cprevalence,
             data = bwe.pot,
             ylim = c(0,1), ylab = "Proportion of shoots with disease cells",
