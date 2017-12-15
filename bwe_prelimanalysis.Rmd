@@ -28,30 +28,56 @@ bwe$lesion.absent <- 1-bwe$lesion
 
 bwe.pot <- bwe %>%
   group_by(diversity, pot, treatment, bin, rep) %>%
-  summarize(Lprevalence = mean(lesion, na.rm = T), Lpresent = sum(lesion, na.rm = T), Labsent = sum(lesion.absent, na.rm = T), Lseverity = mean(lc.FS, na.rm = T), Cprevalence = mean(cells.present, na.rm = T), Cpresent = sum(cells.present, na.rm = T), Cabsent = sum(cells.absent, na.rm = T), Cseverity = mean(cell.mg, na.rm = T))
+  summarize(Lprevalence = mean(lesion, na.rm = T), Lpresent = sum(lesion, na.rm = T), Labsent = sum(lesion.absent, na.rm = T), Lseverity = mean(lc.FS, na.rm = T)/100, Cprevalence = mean(cells.present, na.rm = T), Cpresent = sum(cells.present, na.rm = T), Cabsent = sum(cells.absent, na.rm = T), Cseverity = mean(cell.mg, na.rm = T))
 
 bwe.pot$Lpresent <- as.numeric(bwe.pot$Lpresent)
 bwe.pot$Cpresent  <- as.numeric(bwe.pot$Cpresent)
 
 bwe.pot$Cseverity.round <- ceiling(bwe.pot$Cseverity) #rounding Cseverity to nearest integer > than Cseverity value
 
+bwe.pot$Lprevalence.arcsine <- asin(sqrt(bwe.pot$Lprevalence)) #arcsine transformation of Lprevalence data
+bwe.pot$Lprevalence.logit <- log((bwe.pot$Lprevalence-0.001)/(1-(bwe.pot$Lprevalence-0.001))) #logit transformation of Lprevalence data
+
+
+bwe.pot$Lseverity.arcsine <-asin(sqrt(bwe.pot$Lseverity)) #arcsine transformation of Lprevalence data
+bwe.pot$Lseverity.logit <- log((bwe.pot$Lseverity)/(1-bwe.pot$Lseverity)) #logit transformation of Lseverity data
+
+bwe.pot$Cprevalence.arcsine <- asin(sqrt(bwe.pot$Cprevalence)) #arcsine transformation of Cprevalence data
+
 str(bwe.pot)
 head(bwe.pot)
+
+bwe.pot.Lintensity <- bwe %>%
+  filter(lesion > 0) %>%
+  group_by(diversity, pot, treatment, bin, rep) %>%
+  summarize(Lintensity= mean(lc.FS, na.rm = T)/100) #subsetting data by lesion prevalence > 0 to measure lesion intensity
+
+bwe.pot.Lintensity$Lintensity.arcsine <- asin(sqrt(bwe.pot.Lintensity$Lintensity)) #arcsine transformation of Lintensity
+bwe.pot.Lintensity$Lintensity.logit <- log(bwe.pot.Lintensity$Lintensity/(1-bwe.pot.Lintensity$Lintensity))
+
+
 ```
 
 #ANALYSES
 ##Lesion Prevalence
 ```{r}
 #Analyses
-#Lprev.model <-  glm(cbind(Lpresent, Labsent) ~ treatment + treatment:diversity, family = binomial, data = bwe.pot)
+#Lprev.model <-  glm(cbind(Lpresent, Labsent) ~ treatment*diversity, family = binomial, data = bwe.pot)
 
 #Lprev.model <- glm(cbind(Lpresent, Labsent) ~ treatment/diversity, family = binomial, data = bwe.pot)
 
-Lprev.model <- glmer(cbind(Lpresent, Labsent) ~ treatment * diversity + (1|bin), family = binomial, data = bwe.pot) #random effects model
+#Lprev.model <- glmer(cbind(Lpresent, Labsent) ~ treatment * diversity + (1|bin), family = binomial, data = bwe.pot) #random effects model
+#anova(Lprev.model, test = "LR")
+#Anova(Lprev.model) ##use this for P values (package = car)
 
-anova(Lprev.model, test = "LR")
+Lprev.model <- aov(Lprevalence.arcsine ~ diversity * treatment + Error(bin), data = bwe.pot)
+summary(Lprev.model)
 
-Anova(Lprev.model) ##use this for P values (package = car)
+Lprev.model2 <- aov(Lprevalence.arcsine ~ diversity * treatment, data = bwe.pot)
+plot(Lprev.model2)
+hist(residuals(Lprev.model2), main = "Arcsine Transformation")
+shapiro.test(residuals(Lprev.model2))
+leveneTest(Lprev.model2)
 
 #Figure
 bargraph.CI(x.factor = treatment,
@@ -64,34 +90,41 @@ bargraph.CI(x.factor = treatment,
 ##Lesion severity
 ```{r}
 #Analyses
-Lsev.model <- aov(Lseverity ~ diversity * treatment + Error(bin), data = bwe.pot)
+Lsev.model <- aov(Lseverity.logit ~ diversity * treatment + Error(bin), data = bwe.pot)
 summary(Lsev.model)
 
-Lsev.model <- glmer(Lseverity ~ diversity * treatment + (1|bin), family = gaussian, data = bwe.pot) #checking to see if glmer formula structure correct
-anova(Lsev.model)
+#Lsev.model <- glmer(Lseverity ~ diversity * treatment + (1|bin), family = gaussian, data = bwe.pot) #checking to see if glmer formula structure correct
+#anova(Lsev.model)
 
-
-
-Lsev.model2 <- aov(Lseverity ~ diversity * treatment, data = bwe.pot)
+Lsev.model2 <- aov(Lseverity.logit ~ diversity * treatment, data = bwe.pot)
 plot(Lsev.model2) #distribution looks ok
+hist(residuals(Lsev.model2))
+shapiro.test(residuals(Lsev.model2))
+leveneTest(Lsev.model2)
 
 #Figure
 bargraph.CI(x.factor = treatment,
             response = Lseverity,
             data = bwe.pot,
-            ylim = c(0,10), ylab = "Mean lesion percent cover",
+            ylim = c(0,0.2), ylab = "Mean lesion percent cover",
             xlab = "Temperature Treatment", legend = T)
 
-##only for pots with disease -->intensity MODEL INCORRECT
-Lintensity.model <- aov(Lseverity ~ treatment * diversity, data = filter(bwe.pot, Lprevalence > 0))
+##INTENSITY only for pots with disease
+Lintensity.model <- aov(Lintensity.logit ~ treatment * diversity + Error(bin), data = bwe.pot.Lintensity)
 summary(Lintensity.model)
-plot(Lintensity.model)
+
+Lintensity.model2 <- aov(Lintensity.logit ~ treatment * diversity, data = bwe.pot.Lintensity)
+summary(Lintensity.model2)
+plot(Lintensity.model2)
+hist(residuals(Lintensity.model2))
+shapiro.test(residuals(Lintensity.model2))
+leveneTest(Lintensity.model2)
 
 #Figure
 bargraph.CI(x.factor = treatment,
-            response = Lseverity,
-            data = filter(bwe.pot, Cprevalence > 0),
-            ylim = c(0,20), ylab = "Mean lesion percent cover",
+            response = Lintensity,
+            data = bwe.pot.Lintensity,
+            ylim = c(0,0.2), ylab = "Mean lesion percent cover",
             xlab = "Temperature Treatment", legend = T)
 
 ```
