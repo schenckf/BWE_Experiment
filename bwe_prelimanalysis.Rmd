@@ -11,6 +11,7 @@ library(dplyr)
 library(sciplot)
 library(car)
 library(lme4)
+library(ggplot2)
 
 source("http://faraway.neu.edu/data/Rprofile")
 ```
@@ -27,72 +28,163 @@ bwe$cells.absent <- 1-bwe$cells.present
 bwe$lesion.absent <- 1-bwe$lesion
 
 bwe.pot <- bwe %>%
+  #filter(cell.mg < 100) %>% #omitting large cell values
   group_by(diversity, pot, treatment, bin, rep) %>%
-  summarize(Lprevalence = mean(lesion, na.rm = T), Lpresent = sum(lesion, na.rm = T), Labsent = sum(lesion.absent, na.rm = T), Lseverity = mean(lc.FS, na.rm = T), Cprevalence = mean(cells.present, na.rm = T), Cpresent = sum(cells.present, na.rm = T), Cabsent = sum(cells.absent, na.rm = T), Cseverity = mean(cell.mg, na.rm = T))
+  summarize(Lprevalence = mean(lesion, na.rm = T), Lpresent = sum(lesion, na.rm = T), Labsent = sum(lesion.absent, na.rm = T), Lseverity = mean(lc.FS, na.rm = T)/100, Cprevalence = mean(cells.present, na.rm = T), Cpresent = sum(cells.present, na.rm = T), Cabsent = sum(cells.absent, na.rm = T), Cseverity = mean(cell.mg, na.rm = T))
 
 bwe.pot$Lpresent <- as.numeric(bwe.pot$Lpresent)
 bwe.pot$Cpresent  <- as.numeric(bwe.pot$Cpresent)
 
 bwe.pot$Cseverity.round <- ceiling(bwe.pot$Cseverity) #rounding Cseverity to nearest integer > than Cseverity value
 
+bwe.pot$Lprevalence.arcsine <- asin(sqrt(bwe.pot$Lprevalence)) #arcsine transformation of Lprevalence data
+bwe.pot$Lprevalence.logit <- log((bwe.pot$Lprevalence-0.001)/(1-(bwe.pot$Lprevalence-0.001))) #logit transformation of Lprevalence data
+
+bwe.pot$Lseverity.arcsine <-asin(sqrt(bwe.pot$Lseverity)) #arcsine transformation of Lprevalence data
+bwe.pot$Lseverity.logit <- log((bwe.pot$Lseverity)/(1-bwe.pot$Lseverity)) #logit transformation of Lseverity data
+
+bwe.pot$Cprevalence.arcsine <- asin(sqrt(bwe.pot$Cprevalence)) #arcsine transformation of Cprevalence data
+bwe.pot$Cprevalence.logit <- log((bwe.pot$Cprevalence + 0.001)/(1 - (bwe.pot$Cprevalence + 0.001))) #logit transformation of Cprevalence data
+bwe.pot$Cprevalence.logit[7] <- log((bwe.pot$Cprevalence [7] - 0.001)/(1 - (bwe.pot$Cprevalence[7] - 0.001))) #logit transformation of Cprevalence data continued
+
+bwe.pot$Cseverity.sqrt <- sqrt(bwe.pot$Cseverity) #sqrt transformation of Cseverity data
+
 str(bwe.pot)
 head(bwe.pot)
+
+bwe.pot.Lintensity <- bwe %>%
+  filter(lesion > 0) %>%
+  group_by(diversity, pot, treatment, bin, rep) %>%
+  summarize(Lintensity= mean(lc.FS, na.rm = T)/100) #subsetting data by lesion prevalence > 0 to measure lesion intensity
+
+bwe.pot.Lintensity$Lintensity.arcsine <- asin(sqrt(bwe.pot.Lintensity$Lintensity)) #arcsine transformation of Lintensity
+bwe.pot.Lintensity$Lintensity.logit <- log(bwe.pot.Lintensity$Lintensity/(1-bwe.pot.Lintensity$Lintensity))
+
+bwe.pot.Cintensity <- bwe %>%
+  filter(cells.present > 0) %>%
+  #filter(cell.mg < 100) %>% #omitting large cell values
+  group_by(diversity, pot, treatment, bin, rep) %>%
+  summarize(Cintensity = mean(cell.mg, na.rm = T)) #subsetting data by cell presence > 0 to measure cell intensity
+
+bwe.pot.Cintensity$Cintensity.sqrt <- sqrt(bwe.pot.Cintensity$Cintensity) #sqrt transformed C intensity
+
+bwe.bin.Cintensity <- bwe %>% #filter out bin with only monocultures
+  filter(cells.present > 0) %>%
+  filter(bin != '14') %>%
+  group_by(diversity, treatment, bin) %>%
+  summarize (Cintensity = mean(cell.mg, na.rm = T)) #subsetting data by cell presence >0 at bin level
+
+bwe.bin.Cintensity$Cintensity.sqrt <- sqrt(bwe.bin.Cintensity$Cintensity)
 ```
 
 #ANALYSES
 ##Lesion Prevalence
 ```{r}
 #Analyses
-#Lprev.model <-  glm(cbind(Lpresent, Labsent) ~ treatment + treatment:diversity, family = binomial, data = bwe.pot)
+#Lprev.model <-  glm(cbind(Lpresent, Labsent) ~ treatment*diversity, family = binomial, data = bwe.pot)
 
 #Lprev.model <- glm(cbind(Lpresent, Labsent) ~ treatment/diversity, family = binomial, data = bwe.pot)
 
-Lprev.model <- glmer(cbind(Lpresent, Labsent) ~ treatment * diversity + (1|bin), family = binomial, data = bwe.pot) #random effects model
+#Lprev.model <- glmer(cbind(Lpresent, Labsent) ~ treatment * diversity + (1|bin), family = binomial, data = bwe.pot) #random effects model
+#anova(Lprev.model, test = "LR")
+#Anova(Lprev.model) ##use this for P values (package = car)
 
-anova(Lprev.model, test = "LR")
+hist(bwe.pot$Lprevalence.arcsine)
 
-Anova(Lprev.model) ##use this for P values (package = car)
+Lprev.model <- aov(Lprevalence.arcsine ~ diversity * treatment + Error(bin), data = bwe.pot)
+summary(Lprev.model)
+
+Lprev.model2 <- aov(Lprevalence.arcsine ~ diversity * treatment, data = bwe.pot)
+plot(Lprev.model2)
+hist(residuals(Lprev.model2), main = "Arcsine Transformation")
+shapiro.test(residuals(Lprev.model2))
+leveneTest(Lprev.model2)
 
 #Figure
-bargraph.CI(x.factor = treatment,
-            response = Lprevalence,
-            data = bwe.pot,
-            ylim = c(0,1.1), ylab = "Proportion of shoots with lesions",
-            xlab = "Temperature Treatment", legend = T)
+p <- ggplot(bwe.pot, aes(x = treatment, y = Lprevalence, fill = diversity)) + 
+  scale_fill_manual(values = c("white", "grey", "")) +
+  geom_violin(position = position_dodge(1)) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
+  stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
+  labs(x = "Temperature Treatment", y = "Proportion of shoots with lesions") +
+  theme_classic()
+p
+
+p <- ggplot(bwe.pot, aes(x = bin, y = Lprevalence, fill = treatment)) + 
+  scale_fill_manual(values = c("white", "grey")) +
+  geom_violin(position = position_dodge(1)) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
+  stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
+  labs(x = "Bin", y = "Proportion of shoots with lesions") +
+  theme_classic()
+p
 ```
 
 ##Lesion severity
 ```{r}
 #Analyses
-Lsev.model <- aov(Lseverity ~ diversity * treatment + Error(bin), data = bwe.pot)
+hist(bwe.pot$Lseverity.arcsine)
+
+Lsev.model <- aov(Lseverity.arcsine ~ diversity * treatment + Error(bin), data = bwe.pot)
 summary(Lsev.model)
 
-Lsev.model <- glmer(Lseverity ~ diversity * treatment + (1|bin), family = gaussian, data = bwe.pot) #checking to see if glmer formula structure correct
-anova(Lsev.model)
+#Lsev.model <- glmer(Lseverity ~ diversity * treatment + (1|bin), family = gaussian, data = bwe.pot) #checking to see if glmer formula structure correct
+#anova(Lsev.model)
 
-
-
-Lsev.model2 <- aov(Lseverity ~ diversity * treatment, data = bwe.pot)
+Lsev.model2 <- aov(Lseverity.arcsine ~ diversity * treatment, data = bwe.pot)
 plot(Lsev.model2) #distribution looks ok
+hist(residuals(Lsev.model2), main = 'arcsine transformation')
+shapiro.test(residuals(Lsev.model2))
+leveneTest(Lsev.model2)
 
-#Figure
-bargraph.CI(x.factor = treatment,
-            response = Lseverity,
-            data = bwe.pot,
-            ylim = c(0,10), ylab = "Mean lesion percent cover",
-            xlab = "Temperature Treatment", legend = T)
+#Figures
+p <- ggplot(bwe.pot, aes(x = treatment, y = Lseverity, fill = diversity)) + 
+  scale_fill_manual(values = c("white", "grey")) +
+  geom_violin(position = position_dodge(1)) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
+  stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
+  labs(x = "Temperature Treatment", y = "Proportion of leaf cover by lesions") +
+  theme_classic()
+p
 
-##only for pots with disease -->intensity MODEL INCORRECT
-Lintensity.model <- aov(Lseverity ~ treatment * diversity, data = filter(bwe.pot, Lprevalence > 0))
+p <- ggplot(bwe.pot, aes(x = bin, y = Lseverity, fill = treatment)) + 
+  scale_fill_manual(values = c("white", "grey")) +
+  geom_violin(position = position_dodge(1)) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
+  stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
+  labs(x = "Bin", y = "Proportion of leaf cover by lesions") +
+  theme_classic()
+p
+
+##Lesion INTENSITY only for pots with disease
+Lintensity.model <- aov(Lintensity.logit ~ treatment * diversity + Error(bin), data = bwe.pot.Lintensity)
 summary(Lintensity.model)
-plot(Lintensity.model)
 
-#Figure
-bargraph.CI(x.factor = treatment,
-            response = Lseverity,
-            data = filter(bwe.pot, Cprevalence > 0),
-            ylim = c(0,20), ylab = "Mean lesion percent cover",
-            xlab = "Temperature Treatment", legend = T)
+Lintensity.model2 <- aov(Lintensity.logit ~ treatment * diversity, data = bwe.pot.Lintensity)
+summary(Lintensity.model2)
+plot(Lintensity.model2)
+hist(residuals(Lintensity.model2))
+shapiro.test(residuals(Lintensity.model2))
+leveneTest(Lintensity.model2)
+
+#Figures
+p <- ggplot(bwe.pot.Lintensity, aes(x = treatment, y = Lintensity, fill = diversity)) + 
+  scale_fill_manual(values = c("white", "grey")) +
+  geom_violin(position = position_dodge(1)) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
+  stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
+  labs(x = "Temperature Treatment", y = "Proportion of diseased leaf cover by lesions") +
+  theme_classic()
+p
+
+p <- ggplot(bwe.pot.Lintensity, aes(x = bin, y = Lintensity, fill = treatment)) + 
+  scale_fill_manual(values = c("white", "grey")) +
+  geom_violin(position = position_dodge(1)) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
+  stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
+  labs(x = "Bin", y = "Proportion of diseased leaf cover by lesions") +
+  theme_classic()
+p
 
 ```
 
@@ -100,35 +192,89 @@ bargraph.CI(x.factor = treatment,
 ```{r}
 #Analyses
 #Cprev.model <-  glm(cbind(Cpresent, Cabsent) ~ treatment + treatment:diversity, family = binomial, data = bwe.pot)
-
 #Cprev.model <- glm(cbind(Cpresent, Cabsent) ~ treatment/diversity, family = binomial, data = bwe.pot)
+#Cprev.model <- glmer(cbind(Cpresent, Cabsent) ~ treatment * diversity + (1|bin), family = binomial, data = bwe.pot)
+#Cprev.model <- glmer(Cprevalence ~ treatment * diversity + (1|bin), family = poisson, data = bwe.pot)
+#anova(Cprev.model, test = "LR")
+#Anova(Cprev.model)
 
-Cprev.model <- glmer(cbind(Cpresent, Cabsent) ~ treatment * diversity + (1|bin), family = binomial, data = bwe.pot)
+hist(bwe.pot$Cprevalence.arcsine)
 
-anova(Cprev.model, test = "LR")
+Cprev.model <- aov(Cprevalence.arcsine ~ diversity * treatment + Error(bin), data = bwe.pot)
+summary(Cprev.model)
 
-Anova(Cprev.model)
+Cprev.model2 <- aov(Cprevalence.arcsine ~ treatment * diversity, data = bwe.pot)
+summary(Cprev.model2)
+plot(Cprev.model2)
+hist(residuals(Cprev.model2))
+shapiro.test(residuals(Cprev.model2))
+leveneTest(Cprev.model2)
 
-bargraph.CI(x.factor = treatment,
-            response = Cprevalence,
-            data = bwe.pot,
-            ylim = c(0,1), ylab = "Proportion of shoots with disease cells",
-            xlab = "Temperature Treatment", legend = T)
+#Figures
+p <- ggplot(bwe.pot, aes(x = treatment, y = Cprevalence, fill = diversity)) + 
+  scale_fill_manual(values = c("white", "grey", "")) +
+  geom_violin(position = position_dodge(1)) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
+  stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
+  labs(x = "Temperature Treatment", y = "Proportion of shoots with Laby cells detected") +
+  theme_classic()
+p
+
+p <- ggplot(bwe.pot, aes(x = bin, y = Cprevalence, fill = treatment)) + 
+  scale_fill_manual(values = c("white", "grey")) +
+  geom_violin(position = position_dodge(1)) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
+  stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
+  labs(x = "Bin", y = "Proportion of shoots with Laby cells detected") +
+  theme_classic()
+p
 ```
 
 ##Cell severity
 ```{r}
 #Analyses ##DATA IS NOT NORMALLY DISTRIBUTED?
-Csev.model <- glm(Cseverity ~ treatment/diversity, family = poisson, data = bwe.pot)
 
-Anova(Csev.model)
-anova(Csev.model, test = "LR")
-
+#Csev.model <- glm(Cseverity ~ treatment/diversity, family = poisson, data = bwe.pot)
+#Anova(Csev.model)
+#anova(Csev.model, test = "LR")
 
 #standard poisson glm with rounded cell/mg values
-Anova(Csev.model <- glm(Cseverity.round ~ treatment/diversity, family = poisson, data = bwe.pot))
+#Anova(Csev.model <- glm(Cseverity.round ~ treatment/diversity, family = poisson, data = bwe.pot))
+
+hist(bwe.pot$Cseverity)
+hist(bwe.pot$Cseverity.sqrt)
+
+Csev.model <- aov(Cseverity ~ diversity.sqrt * treatment + Error(bin), data = bwe.pot)
+summary(Csev.model)
+
+Csev.model2 <- aov(Cseverity.sqrt ~ diversity * treatment, data = bwe.pot)
+summary(Csev.model2)
+plot(Csev.model2)
+hist(residuals(Csev.model2))
+shapiro.test(residuals(Csev.model2))
+leveneTest(Csev.model2)
+
 #exploratory figures
+p <- ggplot(bwe.pot, aes(x = treatment, y = Cseverity, fill = diversity)) + 
+  scale_fill_manual(values = c("white", "grey")) +
+  geom_violin(position = position_dodge(1)) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
+  stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
+  labs(x = "Temperature Treatment", y = "Laby cells / mg") +
+  theme_classic()
+p
+
+p <- ggplot(bwe.pot, aes(x = bin, y = Cseverity, fill = treatment)) + 
+  scale_fill_manual(values = c("white", "grey")) +
+  geom_violin(position = position_dodge(1)) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
+  stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
+  labs(x = "Bin", y = "Laby cells / mg") +
+  theme_classic()
+p
+
 bargraph.CI(x.factor = treatment,
+            group = diversity,
             response = Cseverity.round,
             data = bwe.pot,
             ylim = c(0,500), ylab = "disease cells/mg",
@@ -139,15 +285,57 @@ bargraph.CI(x.factor = diversity,
             ylim = c(0,500), ylab = "disease cells/mg",
             xlab = "Diversity", legend = T)
 
-##only for pots with disease -->intensity MODEL INCORRECT
-Cintensity.model <- glm(Cseverity.round ~ treatment/diversity, family = poisson, data = filter(bwe.pot, Cprevalence > 0))
-Anova(Cintensity.model)
+##Cell INTENSITY only plants with disease
+#Cintensity.model <- glm(Cseverity.round ~ treatment/diversity, family = poisson, data = filter(bwe.pot, Cprevalence > 0))
+#Anova(Cintensity.model)
+
+hist(bwe.pot.Cintensity$Cintensity.sqrt)
+
+Cintensity.model <- aov(Cintensity.sqrt ~ diversity * treatment + Error(bin), data = bwe.pot.Cintensity)
+summary(Cintensity.model)
+
+Cintensity.model <- aov(Cintensity.sqrt ~ diversity * treatment + Error(bin), data = bwe.bin.Cintensity)
+summary(Cintensity.model)
+
+Cintensity.model2 <- aov(Cintensity.sqrt ~ diversity * treatment, data = bwe.bin.Cintensity)
+summary(Cintensity.model2)
+
+plot(Cintensity.model2)
+hist(residuals(Cintensity.model2))
+shapiro.test(residuals(Cintensity.model2))
+leveneTest(Cintensity.model2)
+
 #Figure
+p <- ggplot(bwe.pot.Cintensity, aes(x = treatment, y = Cintensity, fill = diversity)) + 
+  scale_fill_manual(values = c("white", "grey")) +
+  geom_violin(position = position_dodge(1)) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
+  stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
+  labs(x = "Temperature Treatment", y = "Laby cells / mg in diseased tissue") +
+  theme_classic()
+p
+
+p <- ggplot(bwe.pot.Cintensity, aes(x = bin, y = Cintensity, fill = treatment)) + 
+  scale_fill_manual(values = c("white", "grey")) +
+  geom_violin(position = position_dodge(1)) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
+  stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
+  labs(x = "Bin", y = "Laby cells / mg in diseased tissue") +
+  theme_classic()
+p
+
 bargraph.CI(x.factor = treatment,
             group = diversity,
-            response = Cseverity.round,
-            data = filter(bwe.pot, Cprevalence > 0),
-            ylim = c(0,1000), ylab = "cells/mg",
+            response = Cintensity,
+            data = bwe.bin.Cintensity,
+            ylim = c(0,1500), ylab = "cells/mg",
+            xlab = "Temperature Treatment", legend = T)
+
+bargraph.CI(x.factor = treatment,
+            group = diversity,
+            response = Cintensity,
+            data = bwe.pot.Cintensity,
+            ylim = c(0,2000), ylab = "cells/mg",
             xlab = "Temperature Treatment", legend = T)
 
 #Zero inflated glm
