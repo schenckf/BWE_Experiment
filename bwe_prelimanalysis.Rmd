@@ -270,7 +270,7 @@ p <- ggplot(bwe.pot, aes(x  = treatment, y = Cseverity, fill = diversity)) +
   theme_classic()
 p
 
-p <- ggplot(bwe.pot, aes(x = bin, y = Cseverity, fill = treatment)) + 
+p <- ggplot(bwe.pot, aes(x = pot, y = Cseverity, fill = treatment)) + 
   scale_fill_manual(values = c("white", "grey")) +
   geom_violin(position = position_dodge(1)) +
   geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
