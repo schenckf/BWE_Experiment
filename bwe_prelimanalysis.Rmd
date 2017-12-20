@@ -116,7 +116,7 @@ p <- ggplot(bwe.pot, aes(x = treatment, y = Lprevalence, fill = diversity)) +
 p
 
 p <- ggplot(bwe.pot, aes(x = bin, y = Lprevalence, fill = treatment)) + 
-  scale_fill_manual(values = c("white", "grey")) +
+  scale_fill_manual(values = c("white", "black", "grey")) +
   geom_violin(position = position_dodge(1)) +
   geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
   stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
@@ -153,7 +153,7 @@ p <- ggplot(bwe.pot, aes(x = treatment, y = Lseverity)) +
 p
 
 p <- ggplot(bwe.pot, aes(x = bin, y = Lseverity, fill = treatment)) + 
-  scale_fill_manual(values = c("white", "grey")) +
+  scale_fill_manual(values = c("white", "black", "grey")) +
   geom_violin(position = position_dodge(1)) +
   geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
   stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
@@ -183,7 +183,7 @@ p <- ggplot(bwe.pot.Lintensity, aes(x = treatment, y = Lintensity)) +
 p
 
 p <- ggplot(bwe.pot.Lintensity, aes(x = bin, y = Lintensity, fill = treatment)) + 
-  scale_fill_manual(values = c("white", "grey")) +
+  scale_fill_manual(values = c("white", "black", "grey")) +
   geom_violin(position = position_dodge(1)) +
   geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
   stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
