@@ -32,7 +32,7 @@ bwe.pot <- bwe %>%
   #filter(treatment == "cold" | treatment =="hot") %>% #omitting pulse treatment 
   #filter(cell.mg < 100) %>% #omitting large cell values
   group_by(diversity, pot, treatment, bin, rep) %>%
-  summarize(Lprevalence = mean(lesion, na.rm = T), Lpresent = sum(lesion, na.rm = T), Labsent = sum(lesion.absent, na.rm = T), Lseverity = mean(lc.FS, na.rm = T)/100, Cprevalence = mean(cells.present, na.rm = T), Cpresent = sum(cells.present, na.rm = T), Cabsent = sum(cells.absent, na.rm = T), Cseverity = mean(cell.mg, na.rm = T))
+  summarize(map.X = mean(map.X), map.Y = mean(map.Y), density = sum(density, na.rm = T), Lprevalence = mean(lesion, na.rm = T), Lpresent = sum(lesion, na.rm = T), Labsent = sum(lesion.absent, na.rm = T), Lseverity = mean(lc.FS, na.rm = T)/100, Cprevalence = mean(cells.present, na.rm = T), Cpresent = sum(cells.present, na.rm = T), Cabsent = sum(cells.absent, na.rm = T), Cseverity = mean(cell.mg, na.rm = T))
 
 bwe.pot$Lpresent <- as.numeric(bwe.pot$Lpresent)
 bwe.pot$Cpresent  <- as.numeric(bwe.pot$Cpresent)
@@ -630,6 +630,13 @@ mosaicplot(table.2, main = "",
            col = T)
 ```
 
+#Spatial Data Visualization
+```{r}
+
+
+
+
+```
 
 
 
