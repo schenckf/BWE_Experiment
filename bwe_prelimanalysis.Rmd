@@ -12,6 +12,7 @@ library(sciplot)
 library(car)
 library(lme4)
 library(ggplot2)
+library(nlme)
 
 source("http://faraway.neu.edu/data/Rprofile")
 ```
@@ -28,6 +29,7 @@ bwe$cells.absent <- 1-bwe$cells.present
 bwe$lesion.absent <- 1-bwe$lesion
 
 bwe.pot <- bwe %>%
+  #filter(treatment == "cold" | treatment =="hot") %>% #omitting pulse treatment 
   #filter(cell.mg < 100) %>% #omitting large cell values
   group_by(diversity, pot, treatment, bin, rep) %>%
   summarize(Lprevalence = mean(lesion, na.rm = T), Lpresent = sum(lesion, na.rm = T), Labsent = sum(lesion.absent, na.rm = T), Lseverity = mean(lc.FS, na.rm = T)/100, Cprevalence = mean(cells.present, na.rm = T), Cpresent = sum(cells.present, na.rm = T), Cabsent = sum(cells.absent, na.rm = T), Cseverity = mean(cell.mg, na.rm = T))
@@ -90,7 +92,7 @@ bwe.bin.Cintensity$Cintensity.sqrt <- sqrt(bwe.bin.Cintensity$Cintensity)
 
 #Lprev.model <- glm(cbind(Lpresent, Labsent) ~ treatment/diversity, family = binomial, data = bwe.pot)
 
-#Lprev.model <- glmer(cbind(Lpresent, Labsent) ~ treatment * diversity + (1|bin), family = binomial, data = bwe.pot) #random effects model
+#Lprev.model <- glmer(cbind(Lpresent, Labsent) ~ treatment * diversity, random = ~1 | bin / diversity, family = binomial, data = bwe.pot) #random effects model --> doesn't work :(
 #anova(Lprev.model, test = "LR")
 #Anova(Lprev.model) ##use this for P values (package = car)
 
@@ -128,6 +130,11 @@ p
 ##Lesion severity
 ```{r}
 #Analyses
+#nlme from Tarik
+Lsev.model <- lme(Lseverity ~ diversity * treatment, random = ~1 | bin / diversity, data = bwe.pot, method = "REML")
+anova(Lsev.model)
+
+#ANOVA with transformations
 hist(bwe.pot$Lseverity.arcsine)
 
 Lsev.model <- aov(Lseverity.arcsine ~ diversity * treatment + Error(bin), data = bwe.pot)
@@ -162,6 +169,9 @@ p <- ggplot(bwe.pot, aes(x = bin, y = Lseverity, fill = treatment)) +
 p
 
 ##Lesion INTENSITY only for pots with disease
+Lintensity.model <- lme(Lintensity ~ diversity * treatment, random = ~1 | bin / diversity, data = bwe.pot.Lintensity, method = "REML") #TARIK CODE using nlme package
+anova(Lintensity.model)
+
 Lintensity.model <- aov(Lintensity.arcsine ~ treatment * diversity + Error(bin), data = bwe.pot.Lintensity)
 summary(Lintensity.model)
 
@@ -198,10 +208,10 @@ p
 #Analyses
 #Cprev.model <-  glm(cbind(Cpresent, Cabsent) ~ treatment + treatment:diversity, family = binomial, data = bwe.pot)
 #Cprev.model <- glm(cbind(Cpresent, Cabsent) ~ treatment/diversity, family = binomial, data = bwe.pot)
-#Cprev.model <- glmer(cbind(Cpresent, Cabsent) ~ treatment * diversity + (1|bin), family = binomial, data = bwe.pot)
+Cprev.model <- glmer(cbind(Cpresent, Cabsent) ~ treatment * diversity + (1|bin/diversity), family = binomial, data = bwe.pot)
 #Cprev.model <- glmer(Cprevalence ~ treatment * diversity + (1|bin), family = poisson, data = bwe.pot)
-#anova(Cprev.model, test = "LR")
-#Anova(Cprev.model)
+anova(Cprev.model, test = "LR")
+Anova(Cprev.model)
 
 hist(bwe.pot$Cprevalence.arcsine)
 
