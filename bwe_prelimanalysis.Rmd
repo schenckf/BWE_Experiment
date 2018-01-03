@@ -12,8 +12,12 @@ library(sciplot)
 library(car)
 library(lme4)
 library(ggplot2)
+library(nlme)
 
 source("http://faraway.neu.edu/data/Rprofile")
+
+#Spatial analyses
+library(mapplots)
 ```
 
 #Importing/wrangling data
@@ -28,9 +32,10 @@ bwe$cells.absent <- 1-bwe$cells.present
 bwe$lesion.absent <- 1-bwe$lesion
 
 bwe.pot <- bwe %>%
+  #filter(treatment == "cold" | treatment =="hot") %>% #omitting pulse treatment 
   #filter(cell.mg < 100) %>% #omitting large cell values
   group_by(diversity, pot, treatment, bin, rep) %>%
-  summarize(Lprevalence = mean(lesion, na.rm = T), Lpresent = sum(lesion, na.rm = T), Labsent = sum(lesion.absent, na.rm = T), Lseverity = mean(lc.FS, na.rm = T)/100, Cprevalence = mean(cells.present, na.rm = T), Cpresent = sum(cells.present, na.rm = T), Cabsent = sum(cells.absent, na.rm = T), Cseverity = mean(cell.mg, na.rm = T))
+  summarize(map.X = mean(map.X), map.Y = mean(map.Y), density = sum(density, na.rm = T), Lprevalence = mean(lesion, na.rm = T), Lpresent = sum(lesion, na.rm = T), Labsent = sum(lesion.absent, na.rm = T), Lseverity = mean(lc.FS, na.rm = T)/100, Cprevalence = mean(cells.present, na.rm = T), Cpresent = sum(cells.present, na.rm = T), Cabsent = sum(cells.absent, na.rm = T), Cseverity = mean(cell.mg, na.rm = T))
 
 bwe.pot$Lpresent <- as.numeric(bwe.pot$Lpresent)
 bwe.pot$Cpresent  <- as.numeric(bwe.pot$Cpresent)
@@ -90,7 +95,7 @@ bwe.bin.Cintensity$Cintensity.sqrt <- sqrt(bwe.bin.Cintensity$Cintensity)
 
 #Lprev.model <- glm(cbind(Lpresent, Labsent) ~ treatment/diversity, family = binomial, data = bwe.pot)
 
-#Lprev.model <- glmer(cbind(Lpresent, Labsent) ~ treatment * diversity + (1|bin), family = binomial, data = bwe.pot) #random effects model
+#Lprev.model <- glmer(cbind(Lpresent, Labsent) ~ treatment * diversity, random = ~1 | bin / diversity, family = binomial, data = bwe.pot) #random effects model --> doesn't work :(
 #anova(Lprev.model, test = "LR")
 #Anova(Lprev.model) ##use this for P values (package = car)
 
@@ -128,6 +133,11 @@ p
 ##Lesion severity
 ```{r}
 #Analyses
+#nlme from Tarik
+Lsev.model <- lme(Lseverity ~ diversity * treatment, random = ~1 | bin / diversity, data = bwe.pot, method = "REML")
+anova(Lsev.model)
+
+#ANOVA with transformations
 hist(bwe.pot$Lseverity.arcsine)
 
 Lsev.model <- aov(Lseverity.arcsine ~ diversity * treatment + Error(bin), data = bwe.pot)
@@ -162,6 +172,9 @@ p <- ggplot(bwe.pot, aes(x = bin, y = Lseverity, fill = treatment)) +
 p
 
 ##Lesion INTENSITY only for pots with disease
+Lintensity.model <- lme(Lintensity ~ diversity * treatment, random = ~1 | bin / diversity, data = bwe.pot.Lintensity, method = "REML") #TARIK CODE using nlme package
+anova(Lintensity.model)
+
 Lintensity.model <- aov(Lintensity.arcsine ~ treatment * diversity + Error(bin), data = bwe.pot.Lintensity)
 summary(Lintensity.model)
 
@@ -198,10 +211,10 @@ p
 #Analyses
 #Cprev.model <-  glm(cbind(Cpresent, Cabsent) ~ treatment + treatment:diversity, family = binomial, data = bwe.pot)
 #Cprev.model <- glm(cbind(Cpresent, Cabsent) ~ treatment/diversity, family = binomial, data = bwe.pot)
-#Cprev.model <- glmer(cbind(Cpresent, Cabsent) ~ treatment * diversity + (1|bin), family = binomial, data = bwe.pot)
+Cprev.model <- glmer(cbind(Cpresent, Cabsent) ~ treatment * diversity + (1|bin/diversity), family = binomial, data = bwe.pot)
 #Cprev.model <- glmer(Cprevalence ~ treatment * diversity + (1|bin), family = poisson, data = bwe.pot)
-#anova(Cprev.model, test = "LR")
-#Anova(Cprev.model)
+anova(Cprev.model, test = "LR")
+Anova(Cprev.model)
 
 hist(bwe.pot$Cprevalence.arcsine)
 
@@ -618,6 +631,37 @@ mosaicplot(table.2, main = "",
            xlab = "lesion percent cover",
            ylab = "cell presence",
            col = T)
+```
+
+#Spatial Data Visualization
+```{r}
+plot(1, type="n", xlab="", ylab="", xlim=c(0.5, 2.5), ylim=c(0.5, 5.5), main="Bin #1")
+add.pie(z = c(5,95), x = 1, y = 1, radius = 0.3, col = c("grey", "white"), labels = c("",""), clockwise = TRUE)
+add.pie(z = c(10,90), x = 1, y = 2, radius = 0.3, col = c("black","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(1.625, 98.375), x = 1, y = 3, radius = 0.3, col = c("yellow","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(5.125,94.875), x = 1, y = 4, radius = 0.3, col = c("green","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(5,95), x = 1, y = 5, radius = 0.3, col = c("orange","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(8.75,91.25), x = 2, y = 1, radius = 0.3, col = c("red", "white"), labels = c("",""), clockwise = TRUE)
+add.pie(z = c(5,95), x = 2, y = 2, radius = 0.3, col = c("brown","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(5,95), x = 2, y = 3, radius = 0.3, col = c("black","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(6.25,93.75), x = 2, y = 4, radius = 0.3, col = c("purple","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(5,95), x = 2, y = 5, radius = 0.3, col = c("blue","white"), labels = c("",""), clockwise = T)
+
+plot(1, type="n", xlab="", ylab="", xlim=c(0.5, 2.5), ylim=c(0.5, 5.5), main="Bin #2")
+add.pie(z = c(5.125, 100-5.125), x = 1, y = 1, radius = 0.3, col = c("grey", "white"), labels = c("",""), clockwise = TRUE)
+add.pie(z = c(8.875, 100-8.875), x = 1, y = 2, radius = 0.3, col = c("yellow","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(13.33, 100-13.33), x = 1, y = 3, radius = 0.3, col = c("black","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(5, 95), x = 1, y = 4, radius = 0.3, col = c("black","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(1.833, 100-1.833), x = 1, y = 5, radius = 0.3, col = c("blue","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(15, 85), x = 2, y = 1, radius = 0.3, col = c("purple", "white"), labels = c("",""), clockwise = TRUE)
+add.pie(z = c(3.75, 100-3.75), x = 2, y = 2, radius = 0.3, col = c("orange","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(3.875, 100-3.875), x = 2, y = 3, radius = 0.3, col = c("green","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(1.375, 100-1.375), x = 2, y = 4, radius = 0.3, col = c("red","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(5, 95), x = 2, y = 5, radius = 0.3, col = c("brown","white"), labels = c("",""), clockwise = T)
+
+
+
+
 ```
 
 
