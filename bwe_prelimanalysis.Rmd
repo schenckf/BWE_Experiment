@@ -15,6 +15,9 @@ library(ggplot2)
 library(nlme)
 
 source("http://faraway.neu.edu/data/Rprofile")
+
+#Spatial analyses
+library(mapplots)
 ```
 
 #Importing/wrangling data
@@ -632,11 +635,35 @@ mosaicplot(table.2, main = "",
 
 #Spatial Data Visualization
 ```{r}
+plot(1, type="n", xlab="", ylab="", xlim=c(0.5, 2.5), ylim=c(0.5, 5.5), main="Bin #1")
+add.pie(z = c(5,95), x = 1, y = 1, radius = 0.3, col = c("grey", "white"), labels = c("",""), clockwise = TRUE)
+add.pie(z = c(10,90), x = 1, y = 2, radius = 0.3, col = c("black","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(1.625, 98.375), x = 1, y = 3, radius = 0.3, col = c("yellow","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(5.125,94.875), x = 1, y = 4, radius = 0.3, col = c("green","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(5,95), x = 1, y = 5, radius = 0.3, col = c("orange","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(8.75,91.25), x = 2, y = 1, radius = 0.3, col = c("red", "white"), labels = c("",""), clockwise = TRUE)
+add.pie(z = c(5,95), x = 2, y = 2, radius = 0.3, col = c("brown","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(5,95), x = 2, y = 3, radius = 0.3, col = c("black","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(6.25,93.75), x = 2, y = 4, radius = 0.3, col = c("purple","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(5,95), x = 2, y = 5, radius = 0.3, col = c("blue","white"), labels = c("",""), clockwise = T)
+
+plot(1, type="n", xlab="", ylab="", xlim=c(0.5, 2.5), ylim=c(0.5, 5.5), main="Bin #2")
+add.pie(z = c(5.125, 100-5.125), x = 1, y = 1, radius = 0.3, col = c("grey", "white"), labels = c("",""), clockwise = TRUE)
+add.pie(z = c(8.875, 100-8.875), x = 1, y = 2, radius = 0.3, col = c("yellow","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(13.33, 100-13.33), x = 1, y = 3, radius = 0.3, col = c("black","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(5, 95), x = 1, y = 4, radius = 0.3, col = c("black","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(1.833, 100-1.833), x = 1, y = 5, radius = 0.3, col = c("blue","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(15, 85), x = 2, y = 1, radius = 0.3, col = c("purple", "white"), labels = c("",""), clockwise = TRUE)
+add.pie(z = c(3.75, 100-3.75), x = 2, y = 2, radius = 0.3, col = c("orange","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(3.875, 100-3.875), x = 2, y = 3, radius = 0.3, col = c("green","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(1.375, 100-1.375), x = 2, y = 4, radius = 0.3, col = c("red","white"), labels = c("",""), clockwise = T)
+add.pie(z = c(5, 95), x = 2, y = 5, radius = 0.3, col = c("brown","white"), labels = c("",""), clockwise = T)
 
 
 
 
 ```
+
 
 
 
