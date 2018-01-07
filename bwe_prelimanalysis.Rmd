@@ -261,6 +261,7 @@ p
 
 hist(bwe.pot$Cseverity)
 hist(bwe.pot$Cseverity.sqrt)
+hist(log(bwe.pot$Cseverity+1))
 
 Csev.model <- aov(Cseverity.sqrt ~ diversity * treatment + Error(bin), data = bwe.pot)
 summary(Csev.model)
@@ -273,13 +274,13 @@ shapiro.test(residuals(Csev.model2))
 leveneTest(Csev.model2)
 
 #exploratory figures
-p <- ggplot(bwe.pot, aes(x  = treatment, y = Cseverity, fill = diversity)) +
+p <- ggplot(bwe.pot, aes(x  = treatment, y = log(Cseverity+1), fill = diversity)) +
   scale_fill_manual(values = c("white", "grey")) +
   geom_violin(position = position_dodge(1)) +
   geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
-  #stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
+  stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
   labs(x = "Temperature Treatment", y = "Laby cells / mg") +
-  ylim(0, 100) +
+  #ylim(0, 100) +
   theme_classic()
 p
 
@@ -309,6 +310,7 @@ bargraph.CI(x.factor = diversity,
 #Anova(Cintensity.model)
 
 hist(bwe.pot.Cintensity$Cintensity.sqrt)
+hist(log(bwe.pot.Cintensity$Cintensity+1))
 
 Cintensity.model <- aov(Cintensity.sqrt ~ diversity * treatment + Error(bin), data = bwe.pot.Cintensity)
 summary(Cintensity.model)
@@ -325,13 +327,13 @@ shapiro.test(residuals(Cintensity.model2))
 leveneTest(Cintensity.model2)
 
 #Figure
-p <- ggplot(bwe.pot.Cintensity, aes(x = treatment, y = Cintensity, fill = diversity)) + 
+p <- ggplot(bwe.pot.Cintensity, aes(x = treatment, y = log(Cintensity+1), fill = diversity)) + 
   scale_fill_manual(values = c("white", "grey")) +
   geom_violin(position = position_dodge(1)) +
   geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
-  #stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
+  stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
   labs(x = "Temperature Treatment", y = "Laby cells / mg in diseased tissue") +
-  ylim(0, 100) +
+  #ylim(0, 100) +
   theme_classic()
 p
 
