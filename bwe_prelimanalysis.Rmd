@@ -85,6 +85,15 @@ bwe.bin.Cintensity <- bwe %>% #filter out bin with only monocultures
   summarize (Cintensity = mean(cell.mg, na.rm = T)) #subsetting data by cell presence >0 at bin level
 
 bwe.bin.Cintensity$Cintensity.sqrt <- sqrt(bwe.bin.Cintensity$Cintensity)
+
+#For non-parametric test, mono's have so many more low samples which is dragging down their count compared to poly's. In order to achieve equal sample size among treatments I think I should randomly sub-sample the mono data from each temp repeatedly
+
+bwe.pot.poly <- bwe.pot %>%
+  filter(treatment != "pulse") %>%
+  filter(diversity == "poly")
+#10 poly hot and 10 poly cold
+
+
 ```
 
 #ANALYSES
@@ -305,6 +314,25 @@ bargraph.CI(x.factor = diversity,
             ylim = c(0,500), ylab = "disease cells/mg",
             xlab = "Diversity", legend = T)
 
+#Non-parametric Kruskal-Wallace Test
+bwe.pot$temp.div <- paste(bwe.pot$treatment, bwe.pot$diversity, sep = ".")
+bwe.pot$temp.div <- as.factor(bwe.pot$temp.div)
+bwe$temp.div <- paste(bwe$treatment, bwe$diversity, sep = ".")
+bwe$temp.div <- as.factor(bwe$temp.div)
+  ##treatment pot level
+kruskal.test(Cseverity ~ treatment, data = filter(bwe.pot, treatment != "pulse")) #significant!
+  ##Diversity pot level
+kruskal.test(Cseverity ~ diversity, data = filter(bwe.pot, treatment != "pulse")) #not significant
+  ##Treatment*Diversity pot level
+kruskal.test(Cseverity ~ temp.div, data = filter(bwe.pot, treatment != "pulse")) #not significant :(
+
+  ##treatment shoot level
+kruskal.test(cell.mg ~ treatment, data = bwe) #significant
+  ##diversity shoot level
+kruskal.test(cell.mg ~ diversity, data = bwe) #no signficant
+  ##Treatment*Diversity shoot level
+kruskal.test(cell.mg ~ temp.div, data = bwe) ##so freaking close!
+
 ##Cell INTENSITY only plants with disease
 #Cintensity.model <- glm(Cseverity.round ~ treatment/diversity, family = poisson, data = filter(bwe.pot, Cprevalence > 0))
 #Anova(Cintensity.model)
@@ -359,6 +387,24 @@ bargraph.CI(x.factor = treatment,
             data = bwe.pot.Cintensity,
             ylim = c(0,2000), ylab = "cells/mg",
             xlab = "Temperature Treatment", legend = T)
+
+#Non-parametric Kruskal-Wallace Test
+bwe.pot.Cintensity$temp.div <- paste(bwe.pot.Cintensity$treatment, bwe.pot.Cintensity$diversity, sep = ".")
+bwe.pot.Cintensity$temp.div <- as.factor(bwe.pot.Cintensity$temp.div)
+  ##treatment
+kruskal.test(Cintensity ~ treatment, data = bwe.pot.Cintensity) #not significant
+  ##Diversity
+kruskal.test(Cintensity ~ diversity, data = bwe.pot.Cintensity) #not significant
+  ##Treatment*Diversity
+kruskal.test(Cintensity ~ temp.div, data = bwe.pot.Cintensity) #not significant
+
+bwe.intensity <- filter(bwe, cell.mg > 0)
+  ##treatment shoot level
+kruskal.test(cell.mg ~ treatment, data = bwe.intensity) #not significant
+  ##diversity shoot level
+kruskal.test(cell.mg ~ diversity, data = bwe.intensity) #not signficant
+  ##Treatment*Diversity shoot level
+kruskal.test(cell.mg ~ temp.div, data = bwe.intensity) ##not signficant
 
 #Zero inflated glm
 #Poisson glm or negative binomial (start with poisson)
