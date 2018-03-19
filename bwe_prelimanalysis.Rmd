@@ -333,6 +333,8 @@ kruskal.test(cell.mg ~ diversity, data = bwe) #no signficant
   ##Treatment*Diversity shoot level
 kruskal.test(cell.mg ~ temp.div, data = bwe) ##so freaking close!
 
+##look at mono vs poly within temp as seperate analyses
+
 ##Cell INTENSITY only plants with disease
 #Cintensity.model <- glm(Cseverity.round ~ treatment/diversity, family = poisson, data = filter(bwe.pot, Cprevalence > 0))
 #Anova(Cintensity.model)
