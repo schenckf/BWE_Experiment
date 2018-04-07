@@ -1070,4 +1070,24 @@ anova(length.model)
 
 ```
 
+#disease detection summary stats and sample Lesion to qPCR detection correlation
+```{r}
+#Lesion detection
+  #537/578 total shoots 
+    #Cold: Shoots- 170/189; Pots- 50/50
+    #Hot:Shoots- 186/189; Pots- 50/50
+    #Pulse: Shoots- 181/188 Pots- 50/50
+
+#qPCR cell detections
+  #65/378 total shoots
+    #Cold: Shoots- 23/189; Pots- 15/50
+    #Hot: Shoots- 42/189; Pots- 25/50
+
+#Lesions on Sample to qPCR cell detections
+  #Samples with lesion and positive qPCR readings out of all samples with lesions 4/10
+  #But, out of the 65 positive qPCR readings the samples with lesions were ranked: 1st, 3rd, 4th, and 6th in terms of infection intensity (cells/mg)
+
+
+
+```
 
