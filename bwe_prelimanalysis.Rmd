@@ -1059,6 +1059,15 @@ add.pie(z = c(5, 95), x = 2, y = 5, radius = 0.3, col = c("brown","white"), labe
 ```{r}
 plot(density ~ treatment, data = bwe.pot)
 
+p <- ggplot(bwe.pot, aes(x = treatment, y = density, fill = diversity)) + 
+  scale_fill_manual(values = c("white", "grey", "")) +
+  geom_violin(position = position_dodge(1)) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
+  stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
+  labs(x = "Temperature Treatment", y = "Eelgrass Shoot Density") +
+  theme_classic()
+p
+
 density.model <- lme(density ~ treatment * diversity, random = ~1 | bin / diversity, data = bwe.pot) #random effects model --> doesn't work :( #cbind(Lpresent, Labsent) #, family = binomial
 anova(density.model)
 
