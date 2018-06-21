@@ -505,7 +505,7 @@ quantile(warm.poly.means, probs = c(0.025, 0.975))
 ##Cell INTENSITY only plants with disease
 #Cintensity.model <- glm(Cseverity.round ~ treatment/diversity, family = poisson, data = filter(bwe.pot, Cprevalence > 0))
 #Anova(Cintensity.model)
-Cintensity.model <- lme(Cintensity.log ~ diversity*treatment + shoots + length.mean, random = ~1 | bin/diversity, data = filter(bwe.pot.Cintensity, Cintensity < 100), method = "REML") #TARIK CODE using nlme package  do i need this term in model under random?(/ diversity))
+Cintensity.model <- lme(Cintensity.log ~ diversity*treatment + shoots + length.mean, random = ~1 | bin/diversity, data = bwe.pot.Cintensity, method = "REML") #TARIK CODE using nlme package  do i need this term in model under random?(/ diversity))
 anova(Cintensity.model)
 
 
@@ -527,7 +527,7 @@ shapiro.test(residuals(Cintensity.model2))
 leveneTest(Cintensity.model2)
 
 #Figure
-p <- ggplot(filter(bwe.pot.Cintensity, Cintensity < 100), aes(x = treatment, y = Cintensity.log, fill = diversity)) + 
+p <- ggplot(bwe.pot.Cintensity, aes(x = treatment, y = Cintensity.log, fill = diversity)) + 
   scale_fill_manual(values = c("white", "grey")) +
   geom_violin(position = position_dodge(1)) +
   geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
@@ -560,7 +560,7 @@ bargraph.CI(x.factor = treatment,
             ylim = c(0,2000), ylab = "cells/mg",
             xlab = "Temperature Treatment", legend = T)
 
-plot(Cintensity.log ~ shoots, filter(bwe.pot.Cintensity, Cintensity < 100))
+plot(Cintensity.log ~ shoots, bwe.pot.Cintensity)
 abline(lm(Cintensity.log ~ shoots, filter(bwe.pot.Cintensity, Cintensity < 100)))
 summary(lm(Cintensity.log ~ density, bwe.pot.Cintensity))
 
@@ -1059,12 +1059,12 @@ add.pie(z = c(5, 95), x = 2, y = 5, radius = 0.3, col = c("brown","white"), labe
 ```{r}
 plot(density ~ treatment, data = bwe.pot)
 
-p <- ggplot(bwe.pot, aes(x = treatment, y = density, fill = diversity)) + 
+p <- ggplot(bwe.pot, aes(x = treatment, y = length.mean, fill = diversity)) + 
   scale_fill_manual(values = c("white", "grey", "")) +
   geom_violin(position = position_dodge(1)) +
   geom_dotplot(binaxis = 'y', stackdir = 'center', position = position_dodge(1), dotsize  = 0.5) +
   stat_summary(fun.y = mean, geom = "point", size = 3, color = "red", position = position_dodge(1)) +
-  labs(x = "Temperature Treatment", y = "Eelgrass Shoot Density") +
+  labs(x = "Temperature Treatment", y = "Eelgrass Shoot Length") +
   theme_classic()
 p
 
