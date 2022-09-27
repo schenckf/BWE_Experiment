@@ -1,0 +1,1846 @@
+---
+title: "Schenck_etal_analyses"
+author: "Forest Schenck"
+date: "8/29/2022"
+output: pdf_document
+editor_options: 
+  chunk_output_type: console
+---
+
+#PACKAGES
+```{r}
+library(dplyr)
+library(tidyr)
+library(sciplot)
+library(car)
+library(lme4)
+library(ggplot2)
+library(emmeans)
+#library(lsmeans)
+library(nlme)
+library(lmerTest)
+library(multcomp)
+library(multcompView)
+library(MASS)
+library(pscl)
+library(pbkrtest)
+library(vcd)
+library(lubridate)
+
+source("http://faraway.neu.edu/data/Rprofile")
+
+#logistic regression with firth's correction for quasi-complete separation
+library(logistf)
+
+#Spatial analyses
+library(mapplots)
+
+#bootstrapping
+library(boot)
+
+#PCA
+library(devtools)
+#install_github("vqv/ggbiplot")
+library(ggbiplot)
+
+#neg. binomial
+library(R2admb)
+#install.packages("glmmADMB",
+                # repos = c("http://glmmadmb.r-forge.r-project.org/repos", getOption("repos")),
+                 #type = "source")
+library(glmmADMB)
+library(coefplot)
+
+#AIC
+library(bbmle)
+
+#SEM/path
+#install.packages("lavaan", dependencies = TRUE)
+library(lavaan) #works!
+#install.packages("semPlot", dependencies = TRUE)
+library(semPlot)
+#install.packages("MVN")
+library(MVN)
+
+#citations
+citation(package = "lavaan")
+citation(package = "vegan")
+citation(package = "lme4")
+citation(package = "MVN")
+
+R.Version()
+```
+
+#Data import
+```{r}
+setwd("~/Desktop")
+
+d1 <- read.csv("Schenck_etal_mesocosm_warming_data.csv") #importing from dropbox
+str(d1)
+
+```
+
+#General data carpentry
+```{r}
+d1$bin <- as.factor(d1$bin)
+
+d1$cells.absent <- 1-d1$cells
+d1$lesion.absent <- 1-d1$lesion
+
+str(d1)
+
+##creating raceway position variables
+
+d1$raceway.position <- NA
+for (n in 1:400) {
+  if (d1$bin[n] == "1" | d1$bin[n] == "2" | d1$bin[n] == "3" | d1$bin[n] == "4")
+  {d1$raceway.position[n] = "1" 
+  } else if (d1$bin[n] == "5" | d1$bin[n] == "6" | d1$bin[n] == "7" | d1$bin[n] == "8")
+    {d1$raceway.position[n] = "2" 
+  } else if (d1$bin[n] == "9" | d1$bin[n] == "10" | d1$bin[n] == "11" | d1$bin[n] == "12")
+    {d1$raceway.position[n] = "3"
+  } else if (d1$bin[n] == "13" | d1$bin[n] == "14" | d1$bin[n] == "15") {
+    d1$raceway.position[n] = "4"
+  }
+}
+
+d1$raceway.position <- as.factor(d1$raceway.position)
+
+d1$raceway.pair <- NA
+for (n in 1:400) {
+  if (d1$bin[n] == "1" | d1$bin[n] == "14")
+  {d1$raceway.pair[n] = "1" 
+  } else if (d1$bin[n] == "2" | d1$bin[n] == "13")
+    {d1$raceway.pair[n] = "2" 
+  } else if (d1$bin[n] == "4" | d1$bin[n] == "12")
+    {d1$raceway.pair[n] = "3"
+  } else if (d1$bin[n] == "5" | d1$bin[n] == "10") {
+    d1$raceway.pair[n] = "4"
+  } else if (d1$bin[n] == "8" | d1$bin[n] == "9") {
+    d1$raceway.pair[n] = "5"
+  }
+}
+
+d1$raceway.pair <- as.factor(d1$raceway.pair)
+
+str(d1)
+```
+
+
+
+#Lesion versus Labyrinthula cells analyses
+##Labyrinthula cell intensity by lesion percent cover
+###Data carpentry
+```{r}
+d2 <- d1 %>%
+  filter(!is.na(lesion.group)) %>%
+  filter(cells.per.mg > 0) %>%
+  mutate(Active.Infection = as.factor(cells))
+  
+d2.1 <- factor(d2$lesion.group)
+str(d2.1)
+
+d2.1.1 <- c("<1", "<10", ">=10", "0")
+d2.1.2 <- c("<1", "<10", ">=10", "<1")
+
+
+d2 <- d1 %>%
+  filter(!is.na(lesion.group)) %>%
+  filter(cells.per.mg > 0) %>%
+  mutate(Active.Infection = as.factor(cells)) %>%
+  mutate(lesion.group = factor(d2.1.1[d2.1])) %>%
+  mutate(lesion.group.2 = factor(d2.1.2[d2.1])) %>%
+  dplyr::select(diversity, temperature, genotype, raceway.pair, lesion, lesion.group, lesion.group.2, lesion.cover, cells.per.mg, cells, cells.absent, Active.Infection) %>%
+  mutate(lesion.group.ordered = ordered(lesion.group, levels = c("0", "<1", "<10", ">=10")),
+         lesion.group.2.ordered = ordered(lesion.group.2, levels = c("<1", "<10", ">=10")),
+         Cintensity.round = ceiling(cells.per.mg))
+
+str(d2)
+```
+
+###Analyses
+```{r}
+#Cintensity ~ lesion
+## Model
+Cint.cvl <- glm(Cintensity.round ~ lesion.group.ordered,
+                     family = poisson(link = "log"),
+                     data = d2)
+
+
+#isSingular(Cabund.cvl, tol = 1e-05) #model not singular
+plot(Cint.cvl) #Slight increase in residuals with fitted value
+hist(residuals(Cint.cvl)) #looks ok
+coefplot(Cint.cvl)
+
+## calculate P-values
+summary(Cint.cvl)
+Anova(Cint.cvl)
+anova(Cint.cvl , test = "LR")
+
+Cint.cvl.null <- glm(Cintensity.round ~ 1,
+                       family = poisson(link = "log"),
+                       data = d2)
+
+#model simplification stepwise backwards-elimination proceedure
+# full model vs main effects model
+anova(Cint.cvl, Cint.cvl.null, test = "LR") #*
+
+## 3) (b) post-hoc analysis / a prior contrasts
+Cint.cvl.lsmo <- lsmeans::lsmeans(Cint.cvl, ~lesion.group.ordered)
+Cint.cvl.cld <- cld(Cint.cvl.lsmo, adjust = 'tukey')
+Cint.cvl.cld
+
+emm <- emmeans(Cint.cvl, ~lesion.group.ordered)
+contrast(emm, method = "tukey")
+```
+
+###Plots
+```{r}
+## 4) How to visualize results correctly for figures?
+str(p0.Cint.cvl <- predict(Cint.cvl))
+
+d2$Cint.cvl.pred <- p0.Cint.cvl
+
+hist(d2$Cint.cvl.pred)
+
+d2.summary <- d2 %>%
+  dplyr::group_by(lesion.group.ordered) %>%
+  dplyr::summarize(Cint.mean = mean(Cintensity.round), Cint.median = median(Cintensity.round), Cint.se = se(Cintensity.round), Cint.n = length(Cintensity.round))
+
+d2.summary$Cint.se.pos <- d2.summary$Cint.mean + d2.summary$Cint.se
+d2.summary$Cint.se.neg <- d2.summary$Cint.mean - d2.summary$Cint.se
+
+
+View(d2.summary)
+
+p <- ggplot(d2.summary, aes(x = lesion.group.ordered, y = Cint.mean/1000)) +
+  scale_fill_manual(values = c("white", "grey40")) +
+  geom_point(size = 3, shape = 21, color = "black", position = position_dodge(0.9)) +
+  labs(x = "Lesion percent cover", y = expression(italic(L.~zosterae)~cells~'*'~mg~dw^-1~x~1000)) +
+  geom_errorbar(aes(ymin = Cint.se.neg/1000, ymax = Cint.se.pos/1000), width = 0.15, position = position_dodge(0.9)) +
+  geom_point(bwe.infection.Cint.analyses, mapping = aes(x = lesion.group.ordered, y = Cintensity.round/1000), size = 0.5, alpha = 0.5) +
+  coord_cartesian(ylim = c(0,15)) +
+  theme_classic()
+p
+```
+
+##Labyrinthula cell presence by lesion percent cover
+###Data carpentry
+```{r}
+d3.1.1 <- c("<1", "<10", ">=10", "<1")
+d3.1.2 <- c("<1", "<10", ">=10", "0")
+
+
+d3 <- d1 %>%
+  filter(!is.na(lesion.group)) %>%
+  mutate(Active.Infection = as.factor(cells))
+  
+d3.1 <- factor(d3$lesion.group)
+
+d3 <- d1 %>%
+  filter(!is.na(lesion.group)) %>%
+  mutate(Active.Infection = as.factor(cells)) %>%
+  mutate(lesion.group = factor(d3.1.1[d3.1])) %>% 
+  mutate(lesion.group.2 = factor(d3.1.2[d3.1])) %>% 
+  dplyr::select(diversity, temperature, genotype, raceway.pair, lesion, lesion.group, lesion.group.2, lesion.cover, cells.per.mg, cells, cells.absent, Active.Infection) %>%
+  mutate(lesion.group.ordered = ordered(lesion.group, levels = c("0", "<1", "<10", ">=10")),
+         lesion.group.2.ordered = ordered(lesion.group.2, levels = c("<1", "<10", ">=10")))
+
+str(d3)
+```
+
+###Analyses
+```{r}
+# Cell prevalence ~ lesion
+
+## Models
+Cprev.cvl <- glm(cbind(cells, cells.absent) ~ lesion.group.ordered,
+                      family = binomial(link = "logit"),
+                      data = d3)
+plot(Cprev.cvl)
+
+hist(residuals(Cprev.cvl))
+coefplot(Cprev.cvl)
+
+Cprev.cvl.null <- glm(cbind(cells, cells.absent) ~ 1,
+                        family = binomial(link = "logit"),
+                        data = d3)
+
+summary(Cprev.cvl)
+Anova(Cprev.cvl)
+anova(Cprev.cvl , test = "LR")
+
+##model simplification stepwise backwards-elimination proceedure
+## full model vs null effects model
+anova(Cprev.cvl, Cprev.cvl.null, test = "LR")
+
+## post-hoc analysis / a prior contrasts
+Cprev.les.cvl.lsmo <- lsmeans::lsmeans(Cprev.cvl, ~lesion.group.ordered)
+Cprev.les.cvl.cld <- cld(Cprev.les.cvl.lsmo, adjust = 'tukey')
+Cprev.les.cvl.cld
+```
+
+###Plots
+```{r}
+##visualize results
+d3.summary <- d3 %>%
+  dplyr::group_by(lesion.group.ordered) %>%
+  dplyr::summarize(Cprev.mean = mean(cells), Cprev.n = length(cells)) %>%
+  mutate(Cprev.se = sqrt((Cprev.mean*(1-Cprev.mean))/Cprev.n))
+
+p <- ggplot(d3.summary, aes(x = lesion.group.ordered, y = Cprev.mean)) +
+  scale_fill_manual(values = c("white", "grey60")) +
+  geom_point(size = 3, shape = 21, position = position_dodge(0.9)) +
+  labs(x = "Lesion percent cover", y = expression(italic(L.~zosterae)~cell~prevalence)) +
+  geom_errorbar(aes(ymin = Cprev.mean - Cprev.se, ymax = Cprev.mean + Cprev.se), width = 0.15, position = position_dodge(0.9)) +
+  coord_cartesian(ylim = c(0,1)) +
+  theme_classic()
+p
+```
+
+#Lesion by temperature, diversity, and genotype analyes
+##Lesion prevalence by temperature and diversity
+###Data carpentry
+```{r}
+d4 <- d1 %>%
+  filter(!is.na(lesion)) %>%
+  group_by(diversity, pot, temperature, bin, raceway.position, raceway.pair) %>%
+  dplyr::summarize(lesion = sum(lesion), lesion.absent = sum(lesion.absent))
+
+d4 <- as.data.frame(d4)
+  
+str(d4)
+```
+
+
+###Analyses
+```{r}
+#models
+Lprev.rwp.d <- glmer(cbind(lesion, lesion.absent) ~ temperature * diversity + (1|raceway.pair),
+                    family = binomial(link = "logit"),
+                    data = d4,
+                    control=glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e4)))
+plot(Lprev.rwp.d)
+
+Lprev.rwp.null <- glmer(cbind(lesion, lesion.absent) ~ 1 + (1|raceway.pair),
+                        family = binomial(link = "logit"),
+                        data = d4,
+                        control=glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e4)))
+Lprev.rwp.a <- glmer(cbind(lesion, lesion.absent) ~ temperature + (1|raceway.pair),
+                     family = binomial(link = "logit"),
+                     data = d4,
+                     control=glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e4)))
+Lprev.rwp.b <- glmer(cbind(lesion, lesion.absent) ~ diversity + (1|raceway.pair),
+                     family = binomial(link = "logit"),
+                     data = d4,
+                     control=glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e4)))
+
+Lprev.rwp.c <- glmer(cbind(lesion, lesion.absent) ~ temperature + diversity + (1|raceway.pair),
+                     family = binomial(link = "logit"),
+                     data = d4,
+                     control=glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e4)))
+
+Anova(Lprev.rwp.d)
+summary(Lprev.rwp.d)
+summary(Lprev.rwp.c)
+
+##model simplification stepwise backwards-elimination proceedure
+# full model vs main effects model
+anova(Lprev.rwp.d, Lprev.rwp.c, test = "LR") #NS
+
+#main effects model vs each main effect seperately
+anova(Lprev.rwp.c, Lprev.rwp.b, test = "LR") #P<0.05
+anova(Lprev.rwp.c, Lprev.rwp.a, test = "LR") #NS
+
+#main effects seperately vs null
+anova(Lprev.rwp.a, Lprev.rwp.null, test = "LR") #P<0.05
+anova(Lprev.rwp.b, Lprev.rwp.null, test = "LR") #NS
+```
+
+###Plots
+```{r}
+##visualize results
+
+str(p0.Lprev <- predict(Lprev.rwp.d))
+
+d4$Lprev.pred <- p0.Lprev
+
+hist(d4$Lprev.pred)
+
+d4.summary <- d4 %>%
+  dplyr::group_by(temperature, diversity) %>%
+  dplyr::summarize(Lprev.pred.mean = mean(Lprev.pred), Lprev.pred.n = length(Lprev.pred))
+d4.summary$Lprev.pred.mean.bt <- (exp(d4.summary$Lprev.pred.mean))/(1 + exp(d4.summary$Lprev.pred.mean))
+d4.summary$Lprev.pred.se.pos <- d4.summary$Lprev.pred.mean.bt + sqrt((d4.summary$Lprev.pred.mean.bt * (1-d4.summary$Lprev.pred.mean.bt))/d4.summary$Lprev.pred.n)
+d4.summary$Lprev.pred.se.neg <- d4.summary$Lprev.pred.mean.bt - sqrt((d4.summary$Lprev.pred.mean.bt * (1-d4.summary$Lprev.pred.mean.bt))/d4.summary$Lprev.pred.n)
+d4.summary$diversity.2 <- c("monoculture", "polyculture", "monoculture", "polyculture")
+
+p <- ggplot(d4.summary, aes(x = diversity.2, y = Lprev.pred.mean.bt, fill = temperature)) +
+  scale_fill_manual(values = c("white", "grey60")) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize = 3, position = position_dodge(0.9)) +
+  labs(x = expression(paste("Temperature treatment")), y = expression(Lesion~prevalence)) +
+  geom_errorbar(aes(ymin = Lprev.pred.se.neg, ymax = Lprev.pred.se.pos), width = 0.15, position = position_dodge(0.9)) +
+  coord_cartesian(ylim = c(0,1)) +
+  labs(fill = "Temperature treatment") +
+  theme_classic()
+p
+```
+
+###Tables
+```{r}
+##table of results for Results Section
+d4.trt.means <- d4 %>%
+  dplyr::group_by(temperature) %>%
+  dplyr::summarize(Lprev.pred.mean = mean(Lprev.pred), Lprev.pred.se = se(Lprev.pred), Lprev.pred.n = length(Lprev.pred), Lprev.raw = mean(lesion))
+d4.trt.means$Lprev.pred.mean.bt <- (exp(d4.trt.means$Lprev.pred.mean))/(1 + exp(d4.trt.means$Lprev.pred.mean))
+d4.trt.means$Lprev.pred.se.pos.bt <- exp(d4.trt.means$Lprev.pred.mean + d4.trt.means$Lprev.pred.se)/(1 + exp(d4.trt.means$Lprev.pred.mean + d4.trt.means$Lprev.pred.se))
+d4.trt.means$Lprev.pred.se.neg.bt <- exp(d4.trt.means$Lprev.pred.mean - d4.trt.means$Lprev.pred.se)/(1 + exp(d4.trt.means$Lprev.pred.mean - d4.trt.means$Lprev.pred.se))
+
+str(d4.trt.means)
+```
+
+##Lesion prevalence by temperature and genotype
+###Data carpentry
+```{r}
+d5 <- d1 %>%
+  filter(diversity != "poly") %>%
+  group_by(diversity, pot, temperature, genotype, bin, raceway.pair) %>%
+  dplyr::summarize(Lprevalence = mean(lesion, na.rm = T), lesion = sum(lesion, na.rm = T), lesion.absent = sum(lesion.absent, na.rm = T))
+
+d5 <- as.data.frame(d5)
+
+d5$lesion <- as.numeric(d5$lesion)
+
+str(d5)
+```
+
+###Analyses
+```{r}
+##models
+Lprev.gen.rwp.d <- glmer(cbind(lesion, lesion.absent) ~ temperature*genotype + (1|raceway.pair),
+                         family = binomial(link = "logit"),
+                         data = d5, 
+                         control=glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e4)))
+#failure to converge
+plot(Lprev.gen.rwp.d)
+
+Lprev.gen.rwp.null <- glmer(cbind(lesion, lesion.absent) ~ 1 + (1|raceway.pair),
+                            family = binomial(link = "logit"),
+                            data = d5,
+                            control=glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e4)))
+
+Lprev.gen.rwp.a <- glmer(cbind(lesion, lesion.absent) ~ temperature + (1|raceway.pair),
+                         family = binomial(link = "logit"),
+                         data = d5,
+                         control=glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e4)))
+
+Lprev.gen.rwp.b <- glmer(cbind(lesion, lesion.absent) ~ genotype + (1|raceway.pair),
+                         family = binomial(link = "logit"),
+                         data = d5,
+                         control=glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e4)))
+#failure to converge
+
+Lprev.gen.rwp.c <- glmer(cbind(lesion, lesion.absent) ~ genotype + temperature + (1|raceway.pair),
+                         family = binomial(link = "logit"),
+                         data = d5,
+                         control=glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e4)))
+#failure to converge
+
+summary(Lprev.gen.rwp.d)
+Anova(Lprev.gen.rwp.d)
+anova(Lprev.gen.rwp.d , test = "LR")
+
+##model simplification stepwise backwards-elimination proceedure
+#full model vs main effects model
+anova(Lprev.gen.rwp.d, Lprev.gen.rwp.c, test = "LR") #NS
+
+#main effects model vs each main effect seperately
+anova(Lprev.gen.rwp.c, Lprev.gen.rwp.b, test = "LR") #P<0.05
+anova(Lprev.gen.rwp.c, Lprev.gen.rwp.a, test = "LR") #P<0.05
+
+#main effects seperately vs null
+anova(Lprev.gen.rwp.b, Lprev.gen.rwp.null, test = "LR") #P<0.05
+anova(Lprev.gen.rwp.a, Lprev.gen.rwp.null, test = "LR") #P<0.05
+
+#Tukey post-hocs
+Lprev.trt.rwp.lsmo <- lsmeans::lsmeans(Lprev.gen.rwp.a, ~temperature)
+Lprev.trt.rwp.cld <- cld(Lprev.trt.rwp.lsmo, adjust = 'tukey')
+Lprev.trt.rwp.cld
+```
+
+###Plots
+```{r}
+##visualize results
+str(p0.Lprev <- predict(Lprev.gen.rwp.d))
+p0.Lprev
+
+d5$Lprev.pred <- p0.Lprev
+
+hist(d5$Lprev.pred)
+
+d5.summary <- d5 %>%
+  dplyr::group_by(genotype, temperature) %>%
+  dplyr::summarize(Lprev.pred.mean = mean(Lprev.pred), Lprev.pred.n = length(Lprev.pred))
+d5.summary$Lprev.pred.mean.bt <- exp(d5.summary$Lprev.pred.mean)/(1+exp(d5.summary$Lprev.pred.mean))
+d5.summary$Lprev.pred.se.pos <- d5.summary$Lprev.pred.mean.bt + sqrt((d5.summary$Lprev.pred.mean.bt * (1-d5.summary$Lprev.pred.mean.bt))/d5.summary$Lprev.pred.n)
+d5.summary$Lprev.pred.se.neg <- d5.summary$Lprev.pred.mean.bt - sqrt((d5.summary$Lprev.pred.mean.bt * (1-d5.summary$Lprev.pred.mean.bt))/d5.summary$Lprev.pred.n)
+
+d5.summary[c(2:10,12:16),6] <- 1 #adjusting error bar to be bounded between 1 and 0
+
+d5.summary <- as.data.frame(d5.summary)
+
+str(d5.summary)
+
+p <- ggplot(d5.summary, aes(x = genotype, y = Lprev.pred.mean.bt, fill = temperature)) +
+  scale_fill_manual(values = c("white", "grey60")) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize  = 2, position = position_dodge(0.2)) +
+  labs(x = expression(italic(Z.~marina)~genotype), y = expression(Lesion~prevalence)) +
+  geom_errorbar(aes(ymin = Lprev.pred.se.neg, ymax = Lprev.pred.se.pos), width = 0.15, position = position_dodge(0.2)) +
+  coord_cartesian(ylim = c(0,1)) +
+  labs(fill = "Temperature treatment") +
+  theme_classic()
+p
+
+
+d5.summary.trt <- d5 %>%
+  dplyr::group_by(temperature) %>%
+  dplyr::summarize(Lprev.pred.mean = mean(Lprev.pred), Lprev.pred.se = se(Lprev.pred), Lprev.raw.mean = mean(Lprevalence))
+d5.summary.trt$Lprev.pred.mean.bt <- exp(d5.summary.trt$Lprev.pred.mean)/(1+exp(d5.summary.trt$Lprev.pred.mean))
+d5.summary.trt$Lprev.pred.se.pos.bt <- exp(d5.summary.trt$Lprev.pred.mean + d5.summary.trt$Lprev.pred.se)/(1+exp(d5.summary.trt$Lprev.pred.mean + d5.summary.trt$Lprev.pred.se))
+d5.summary.trt$Lprev.pred.se.neg.bt <- exp(d5.summary.trt$Lprev.pred.mean - d5.summary.trt$Lprev.pred.se)/(1+exp(d5.summary.trt$Lprev.pred.mean - d5.summary.trt$Lprev.pred.se))
+
+str(d5.summary.trt)
+
+p <- ggplot(d5.summary.trt, aes(x = temperature, y = Lprev.pred.mean.bt)) +
+  #scale_fill_manual(values = c("white", "grey60")) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize  = 1, position = position_dodge(0.1)) +
+  labs(x = expression(Seawater~temperature), y = expression(Lesion~prevalence)) +
+  geom_errorbar(aes(ymin = Lprev.pred.se.neg.bt, ymax = Lprev.pred.se.pos.bt ), width = 0.15, position = position_dodge(0.1)) +
+  coord_cartesian(ylim = c(0,1)) +
+  #labs(fill = "Temperature treatment") +
+  theme_classic()
+p
+```
+
+##Lesion percent cover intensity by temperature and diversity
+###Data carpentry
+```{r}
+
+d6 <- d1 %>%
+  filter(lesion.cover > 0) %>%
+  group_by(diversity, pot, temperature, genotype, bin, raceway.position, raceway.pair) %>%
+  dplyr::summarize(lesion.cover = mean(lesion.cover, na.rm = T))
+
+d6$lesion.cover.sqrt <- sqrt(d6$lesion.cover)
+
+
+hist(d6$lesion.cover.sqrt)
+```
+
+###Analyses
+```{r}
+#models
+Lint.rwp <- lmer(lesion.cover.sqrt ~ diversity * temperature + (1|raceway.pair),
+                  data = d6)
+
+plot(Lint.rwp)
+hist(residuals(Lint.rwp))
+coefplot(Lint.rwp)
+
+Lint.rwp.null <- lmer(lesion.cover.sqrt ~ 1 + (1|raceway.pair),
+                       data = d6)
+Lint.rwp.a <- lmer(lesion.cover.sqrt ~ temperature + (1|raceway.pair),
+                    data = d6)
+Lint.rwp.b <- lmer(lesion.cover.sqrt ~ diversity + (1|raceway.pair),
+                    data = d6)
+Lint.rwp.c <- lmer(lesion.cover.sqrt ~ temperature + diversity + (1|raceway.pair),
+                    data = d6)
+summary(Lint.rwp)
+Anova(Lint.rwp)
+anova(Lint.rwp , test = "LR")
+
+#model simplification stepwise backwards-elimination proceedure
+#full model vs. main effects model
+anova(Lint.rwp, Lint.rwp.c, test = "LR") #NS
+
+#main effects model vs each main effect seperately
+anova(Lint.rwp.c, Lint.rwp.a, test = "LR") #NS
+anova(Lint.rwp.c, Lint.rwp.b, test = "LR") #P<0.05
+
+#main effects seperately vs null
+anova(Lint.rwp.a, Lint.rwp.null, test = "LR") #P<0.05
+anova(Lint.rwp.b, Lint.rwp.null, test = "LR") #NS
+```
+
+###Plots
+```{r}
+str(p0.Lint <- predict(Lint.rwp))
+
+d6$Lint.pred <- p0.Lint
+
+d6$Lint.pred.bt <- (d6$Lint.pred)^2
+
+hist(d6$Lint.pred)
+
+d6.summary <- d6 %>%
+  dplyr::group_by(temperature, diversity) %>%
+  dplyr::summarize(lesion.cover.mean = mean(lesion.cover.sqrt),
+                   lesion.cover.se = se(lesion.cover.sqrt),
+                   Lint.pred.mean = mean(Lint.pred), Lint.pred.se = se(Lint.pred),
+                   Lint.pred.n = length(lesion.cover))
+d6.summary$Lint.pred.mean.bt <- (d6.summary$Lint.pred.mean)^2
+d6.summary$Lint.pred.se.pos.bt <- (d6.summary$Lint.pred.mean + d6.summary$Lint.pred.se)^2
+d6.summary$Lint.pred.se.neg.bt <- (d6.summary$Lint.pred.mean - d6.summary$Lint.pred.se)^2
+
+d6.summary <- as.data.frame(d6.summary)
+
+str(d6.summary)
+
+##violin plot model data
+p <- ggplot(d6.summary, aes(x = diversity, y = Lint.pred.mean.bt, fill = temperature)) +
+  scale_fill_manual(values = c("white", "grey60")) +
+  geom_point(size = 3, shape = 21, position = position_dodge(0.9)) +
+  labs(x = "Genotypic diversity", y = expression(Lesion~percent~cover)) +
+  geom_errorbar(aes(ymin = Lint.pred.se.neg.bt, ymax = Lint.pred.se.pos.bt), width = 0.15, position = position_dodge(0.9)) +
+  geom_violin(d6, mapping = aes(x = diversity, y = Lint.pred.bt, fill = temperature), trim = T, scale = "width", alpha = 0.5) +
+  coord_cartesian(ylim = c(0,15)) +
+  labs(fill = "Temperature treatment") +
+  theme_classic()
+p
+```
+
+###Tables
+```{r}
+d6.means <- d6 %>%
+  dplyr::group_by(temperature) %>%
+  dplyr::summarize(Lint.mean = mean(lesion.cover.sqrt), Lint.se = se(lesion.cover.sqrt),
+                   Lint.pred.mean = mean(Lint.pred), Lint.pred.se = se(Lint.pred),
+                   Lint.pred.n = length(lesion.cover))
+d6.means$Lint.pred.mean.bt <- (d6.means$Lint.pred.mean)^2
+d6.means$Lint.pred.se.pos.bt <- (d6.means$Lint.pred.mean + d6.means$Lint.pred.se)^2
+d6.means$Lint.pred.se.neg.bt <- (d6.means$Lint.pred.mean - d6.means$Lint.pred.se)^2
+
+str(d6.means)
+View(d6.means)
+```
+
+
+##Lesion percent cover intensity by temperature and genotype
+###Data carpentry
+```{r}
+d7 <- d6 %>%
+  filter(diversity != "poly")
+
+d7 <- as.data.frame(d7)
+
+str(d7)
+```
+
+###Analyses
+```{r}
+#models
+Lint.rwp.gen <- lmer(lesion.cover.sqrt ~ genotype * temperature + (1|raceway.pair),
+                 data = d7)
+
+plot(Lint.rwp.gen)
+hist(residuals(Lint.rwp.gen))
+coefplot(Lint.rwp.gen)
+
+summary(Lint.rwp.gen)
+Anova(Lint.rwp.gen)
+anova(Lint.rwp.gen, test = "LR")
+
+Lint.rwp.gen.null <- lmer(lesion.cover.sqrt ~ 1 + (1|raceway.pair),
+                      data = d7)
+Lint.rwp.gen.a <- lmer(lesion.cover.sqrt ~ temperature + (1|raceway.pair),
+                   data = d7)
+Lint.rwp.gen.b <- lmer(lesion.cover.sqrt ~ genotype + (1|raceway.pair),
+                   data = d7)
+Lint.rwp.gen.c <- lmer(lesion.cover.sqrt ~ temperature + genotype + (1|raceway.pair),
+                   data = d7)
+
+#model simplification stepwise backwards-elimination proceedure
+#full model vs. main effects model
+anova(Lint.rwp.gen, Lint.rwp.gen.c, test = "LR") #P<0.1, MARG
+
+#main effects model vs each main effect seperately
+anova(Lint.rwp.gen.c, Lint.rwp.gen.a, test = "LR") #NS
+anova(Lint.rwp.gen.c, Lint.rwp.gen.b, test = "LR") #P<0.05
+
+#main effects seperately vs null
+anova(Lint.rwp.gen.a, Lint.rwp.gen.null, test = "LR") #P<0.05
+anova(Lint.rwp.gen.b, Lint.rwp.gen.null, test = "LR") #NS
+```
+
+###Plots
+```{r}
+##visualize results
+str(p0.Lint <- predict(Lint.rwp.gen))
+
+d7$Lint.pred <- p0.Lint
+
+d7$Lint.pred.bt <- (d7$Lint.pred)^2
+
+hist(d7$Lint.pred)
+
+d7.summary <- d7 %>%
+  dplyr::group_by(temperature, genotype) %>%
+  dplyr::summarize(Lint.mean = mean(lesion.cover.sqrt), Lint.se = se(lesion.cover.sqrt),
+                   Lint.pred.mean = mean(Lint.pred), Lint.pred.se = se(Lint.pred),
+                   Lint.pred.n = length(lesion.cover))
+d7.summary$Lint.pred.mean.bt <- (d7.summary$Lint.pred.mean)^2
+d7.summary$Lint.pred.se.pos.bt <- (d7.summary$Lint.pred.mean + d7.summary$Lint.pred.se)^2
+d7.summary$Lint.pred.se.neg.bt <- (d7.summary$Lint.pred.mean - d7.summary$Lint.pred.se)^2
+
+d7.summary <- as.data.frame(d7.summary)
+
+str(d7.summary)
+
+##violin plot model data
+p <- ggplot(d7.summary, aes(x = genotype, y = Lint.pred.mean.bt, fill = temperature)) +
+  scale_fill_manual(values = c("white", "grey60")) +
+  geom_violin(d7, mapping = aes(x = genotype, y = Lint.pred.bt, fill = temperature), trim = T, scale = "width") +
+  geom_point(size = 1.5, shape = 21, position = position_dodge(0.9)) +
+  labs(x = expression(italic(Z.~marina)~genotype), y = expression(Lesion~percent~cover~intensity)) +
+  geom_errorbar(aes(ymin = Lint.pred.se.neg.bt, ymax = Lint.pred.se.pos.bt), width = 0.15, position = position_dodge(0.9)) +
+  coord_cartesian(ylim = c(0,15)) +
+  labs(fill = "Temperature treatment") +
+  theme_classic()
+p
+```
+
+###Tables
+```{r}
+d7.summary.trt <- d7 %>%
+  dplyr::group_by(temperature) %>%
+  dplyr::summarize(Lint.mean = mean(lesion.cover.sqrt), Lint.se = se(lesion.cover.sqrt),
+                   Lint.pred.mean = mean(Lint.pred), Lint.pred.se = se(Lint.pred),
+                   Lint.pred.n = length(lesion.cover))
+d7.summary.trt$Lint.pred.mean.bt <- (d7.summary.trt$Lint.pred.mean)^2
+
+str(d7.summary.trt)
+```
+
+
+#Labyrinthula cells by temperature, diversity, and genotype analyses
+##Labyrinthula cell prevalence by temperature and diversity
+###Data carpentry
+```{r}
+d8 <- d1 %>%
+  filter(!is.na(cells)) %>%
+  group_by(diversity, pot, temperature, bin, raceway.position, raceway.pair) %>%
+  dplyr::summarize(cells = sum(cells), cells.absent = sum(cells.absent))
+
+d8 <- as.data.frame(d8)
+
+str(d8)
+```
+
+###Analyses
+```{r}
+#models
+Cprev.rwp.d <- glmer(cbind(cells, cells.absent) ~ temperature * diversity + (1|raceway.pair),
+                    family = binomial(link = "logit"),
+                    data = d8)
+plot(Cprev.rwp.d)
+Anova(Cprev.rwp.d)
+
+Cprev.rwp.null <- glmer(cbind(cells, cells.absent) ~ 1 + (1|raceway.pair),
+                       family = binomial(link = "logit"),
+                       data = d8)
+Cprev.rwp.a <- glmer(cbind(cells, cells.absent) ~ temperature + (1|raceway.pair),
+                    family = binomial(link = "logit"),
+                    data = d8)
+Cprev.rwp.b <- glmer(cbind(cells, cells.absent) ~ diversity + (1|raceway.pair),
+                    family = binomial(link = "logit"),
+                    data = d8)
+
+Cprev.rwp.c <- glmer(cbind(cells, cells.absent) ~ temperature + diversity + (1|raceway.pair),
+                    family = binomial(link = "logit"),
+                    data = d8)
+
+
+#model simplification stepwise backwards-elimination proceedure
+#full model vs main effects model
+anova(Cprev.rwp.d, Cprev.rwp.c, test = "LR") #NS
+
+#main effects model vs each main effect seperately
+anova(Cprev.rwp.c, Cprev.rwp.b, test = "LR") #P<0.05
+anova(Cprev.rwp.c, Cprev.rwp.a, test = "LR") #NS
+
+#main effects seperately vs null
+anova(Cprev.rwp.a, Cprev.rwp.null, test = "LR") #P<0.05
+anova(Cprev.rwp.b, Cprev.rwp.null, test = "LR") #NS
+```
+
+###Plots
+```{r}
+str(p0.Cprev <- predict(Cprev.rwp.d))
+
+d8$Cprev.pred <- p0.Cprev
+
+hist(d8$Cprev.pred)
+
+d8.summary <- d8 %>%
+  dplyr::group_by(temperature, diversity) %>% 
+  dplyr::summarize(Cprev.pred.mean = mean(Cprev.pred), Cprev.pred.n = length(Cprev.pred))
+d8.summary$Cprev.pred.mean.bt <- (exp(d8.summary$Cprev.pred.mean))/(1 + exp(d8.summary$Cprev.pred.mean))
+d8.summary$Cprev.pred.se.pos <- d8.summary$Cprev.pred.mean.bt + sqrt((d8.summary$Cprev.pred.mean.bt * (1-d8.summary$Cprev.pred.mean.bt))/d8.summary$Cprev.pred.n)
+d8.summary$Cprev.pred.se.neg <- d8.summary$Cprev.pred.mean.bt - sqrt((d8.summary$Cprev.pred.mean.bt * (1-d8.summary$Cprev.pred.mean.bt))/d8.summary$Cprev.pred.n)
+
+
+p <- ggplot(d8.summary, aes(x = diversity, y = Cprev.pred.mean.bt, fill = temperature)) +
+  scale_fill_manual(values = c("white", "grey60")) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize  = 1.5, position = position_dodge(0.9)) +
+  labs(x = "Genotypic Diversity", y = expression(italic(L.~zosterae)~cell~prevalence)) +
+  geom_errorbar(aes(ymin = Cprev.pred.se.neg, ymax = Cprev.pred.se.pos), width = 0.15, position = position_dodge(0.9)) +
+  coord_cartesian(ylim = c(0,1)) +
+  labs(fill = "Temperature treatment") +
+  theme_classic()
+p
+```
+
+##Labyrinthula cell prevalence by temperature and genotype
+###Data carpentry
+```{r}
+d9 <- d1 %>%
+  filter(diversity != "poly") %>%
+  group_by(diversity, pot, temperature, genotype, bin, raceway.pair) %>%
+  dplyr::summarize(Cprevalence = mean(cells, na.rm = T), cells = sum(cells, na.rm = T), cells.absent = sum(cells.absent, na.rm = T))
+
+d9 <- as.data.frame(d9)
+
+str(d9)
+```
+
+###Analyses
+```{r}
+#models
+Cprev.gen.rwp.d <- glmer(cbind(cells, cells.absent) ~ temperature*genotype + (1|raceway.pair),
+                        family = binomial(link = "logit"),
+                        data = d9, 
+                        control=glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e4)))
+
+plot(Cprev.gen.rwp.d)
+
+summary(Cprev.gen.rwp.d)
+Anova(Cprev.gen.rwp.d)
+
+Cprev.gen.rwp.null <- glmer(cbind(cells, cells.absent) ~ 1 + (1|raceway.pair),
+                           family = binomial(link = "logit"),
+                           data = d9,
+                           control=glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e4)))
+
+Cprev.gen.rwp.a <- glmer(cbind(cells, cells.absent) ~ temperature + (1|raceway.pair),
+                        family = binomial(link = "logit"),
+                        data = d9,
+                        control=glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e4)))
+
+Cprev.gen.rwp.b <- glmer(cbind(cells, cells.absent) ~ genotype + (1|raceway.pair),
+                        family = binomial(link = "logit"),
+                        data = d9,
+                        control=glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e4)))
+
+Cprev.gen.rwp.c <- glmer(cbind(cells, cells.absent) ~ genotype + temperature + (1|raceway.pair),
+                        family = binomial(link = "logit"),
+                        data = d9,
+                        control=glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e4)))
+
+#model simplification stepwise backwards-elimination proceedure
+#full model vs main effects model
+anova(Cprev.gen.rwp.d, Cprev.gen.rwp.c, test = "LR") #P<0.05
+
+#main effects model vs each main effect seperately
+anova(Cprev.gen.rwp.c, Cprev.gen.rwp.b, test = "LR") #P<0.05
+anova(Cprev.gen.rwp.c, Cprev.gen.rwp.a, test = "LR") #P<0.05
+
+#main effects seperately vs null
+anova(Cprev.gen.rwp.b, Cprev.gen.rwp.null, test = "LR") #P<0.05
+anova(Cprev.gen.rwp.a, Cprev.gen.rwp.null, test = "LR") #P<0.05
+
+## A priori contrasts
+Cprev.gen.rwp.null.ph <- glmer(cbind(cells, cells.absent) ~ 1 + (1|raceway.pair),
+                              family = binomial(link = "logit"),
+                              data = filter(d9, genotype == "yellow"), 
+                              control=glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e4)))
+
+Cprev.gen.rwp.ph <- glmer(cbind(cells, cells.absent) ~ temperature + (1|raceway.pair),
+                         family = binomial(link = "logit"),
+                         data = filter(d9, genotype == "yellow"), 
+                         control=glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun=2e4)))
+
+anova(Cprev.gen.rwp.null.ph, Cprev.gen.rwp.ph, test = "LR")
+
+#Adjust filters and predictors of above models as needed for each a priori contrast
+#temperature diff: blue (NS), brown (*), green(*), orange (.), purple (NS), red (NS), white (NS), yellow (NS)
+#genotype diff (cold): green < red & yellow; marginally less than purple
+#genotype diff (hot): NS
+```
+
+###Plots
+```{r}
+str(p0.Cprev <- predict(Cprev.gen.rwp.d))
+
+d9$Cprev.pred <- p0.Cprev
+
+hist(d9$Cprev.pred)
+
+d9.summary <- d9 %>%
+  dplyr::group_by(temperature, genotype) %>%
+  dplyr::summarize(Cprev.pred.mean = mean(Cprev.pred), Cprev.pred.n = length(Cprev.pred))
+d9.summary$Cprev.pred.mean.bt <- exp(d9.summary$Cprev.pred.mean)/(1+exp(d9.summary$Cprev.pred.mean))
+d9.summary$Cprev.pred.se.pos <- d9.summary$Cprev.pred.mean.bt + sqrt((d9.summary$Cprev.pred.mean.bt * (1-d9.summary$Cprev.pred.mean.bt))/d9.summary$Cprev.pred.n)
+d9.summary$Cprev.pred.se.neg <- d9.summary$Cprev.pred.mean.bt - sqrt((d9.summary$Cprev.pred.mean.bt * (1-d9.summary$Cprev.pred.mean.bt))/d9.summary$Cprev.pred.n)
+
+d9.summary[3,7] <- 0 #adjusting error bar to be bounded between 1 and 0
+
+p <- ggplot(d9.summary, aes(x = genotype, y = Cprev.pred.mean.bt, fill = temperature)) +
+  scale_fill_manual(values = c("white", "grey60")) +
+  geom_dotplot(binaxis = 'y', stackdir = 'center', dotsize  = 1, position = position_dodge(0.1)) +
+  labs(x = expression(italic(Z.~marina)~genotype), y = expression(italic(L.~zosterae)~cell~prevalence)) +
+  geom_errorbar(aes(ymin = Cprev.pred.se.neg, ymax = Cprev.pred.se.pos), width = 0.15, position = position_dodge(0.1)) +
+  coord_cartesian(ylim = c(0,1)) +
+  labs(fill = "Temperature treatment") +
+  theme_classic()
+p
+```
+
+##Labyrinthula cell intensity by temperature and diversity
+###Data carpentry
+```{r}
+d10 <- d1 %>%
+  filter(!is.na(cells.per.mg)) %>%
+  filter(cells.per.mg > 0 ) %>%
+  group_by(diversity, pot, temperature, bin, raceway.position, raceway.pair) %>%
+  dplyr::summarize(cells.per.mg = mean(cells.per.mg))
+
+d10$Cintensity.round <- ceiling(d10$cells.per.mg)
+
+d10 <- as.data.frame(d10)
+
+str(d10)
+```
+
+###Analyses
+```{r}
+#models
+Cint.rwp <- glmer(Cintensity.round ~ diversity * temperature + (1|raceway.pair), #glmer
+                 family = poisson(link = "log"), #(link = "log")
+                 data = filter(d10, raceway.pair != "1"))
+
+isSingular(Cint.rwp, tol = 1e-05)
+plot(Cint.rwp)
+hist(residuals(Cint.rwp))
+coefplot(Cint.rwp)
+
+summary(Cint.rwp)
+Anova(Cint.rwp)
+anova(Cint.rwp , test = "LR")
+
+Cint.rwp.null <- glmer(Cintensity.round ~ 1 + (1|raceway.pair),
+                      family = poisson(link = "log"),
+                      data = filter(d10, raceway.pair != "1"))
+Cint.rwp.a <- glmer(Cintensity.round ~ temperature + (1|raceway.pair),
+                   family = poisson(link = "log"),
+                   data = filter(d10, raceway.pair != "1"))
+Cint.rwp.b <- glmer(Cintensity.round ~ diversity + (1|raceway.pair),
+                   family = poisson(link = "log"),
+                   data = filter(d10, raceway.pair != "1"))
+Cint.rwp.c <- glmer(Cintensity.round ~ temperature + diversity + (1|raceway.pair),
+                   family = poisson(link = "log"),
+                   data = filter(d10, raceway.pair != "1"))
+
+#model simplification stepwise backwards-elimination proceedure
+#full model vs main effects model
+anova(Cint.rwp, Cint.rwp.c, test = "LR") #P < 0.05
+
+#main effects model vs each main effect seperately
+anova(Cint.rwp.c, Cint.rwp.a, test = "LR") #P<0.05
+anova(Cint.rwp.c, Cint.rwp.b, test = "LR") #P<0.05
+
+#main effects seperately vs null
+anova(Cint.rwp.null, Cint.rwp.b, test = "LR") #P<0.05
+anova(Cint.rwp.null, Cint.rwp.a, test = "LR") #P<0.05
+
+##post-hoc analysis
+Cint.rwp.lsmo <- lsmeans::lsmeans(Cint.rwp, ~temperature:diversity)
+Cint.rwp.cld <- cld(Cint.rwp.lsmo, adjust = 'tukey')
+Cint.rwp.cld
+
+emm <- emmeans(Cint.rwp, ~diversity|temperature)
+contrast(emm, method = "tukey")
+
+emm <- emmeans(Cint.rwp, ~temperature|diversity)
+contrast(emm, method = "tukey")
+```
+
+###Plots
+```{r}
+str(p0.Cint <- predict(Cint.rwp))
+
+d10.sub.rwp1 <- d10 %>%
+  filter(raceway.pair != "1")
+d10.sub.rwp1$Cint.pred <- p0.Cint
+d10.sub.rwp1 <- as.data.frame(d10.sub.rwp1)
+d10.sub.rwp1$Cint.pred.bt <- exp(d10.sub.rwp1$Cint.pred)
+d10.sub.rwp1$interaction <- with(d10.sub.rwp1, interaction(temperature, diversity))
+
+str(d10.sub.rwp1)
+
+hist(d10.sub.rwp1$Cint.pred)
+
+d10.summary <- d10.sub.rwp1 %>%
+  dplyr::group_by(diversity, temperature) %>% 
+  dplyr::summarize(Cint.mean = mean(Cintensity.round), Cint.median = median(Cintensity.round), Cint.se = se(Cintensity.round), Cint.pred.mean = mean(Cint.pred), Cint.pred.median = median(Cint.pred), Cint.pred.se = se(Cint.pred), Cint.pred.n = length(Cintensity.round))
+d10.summary$Cint.pred.mean.bt <- exp(d10.summary$Cint.pred.mean)
+d10.summary$Cint.pred.median.bt <- exp(d10.summary$Cint.pred.median)
+d10.summary$Cint.pred.se.pos.bt <- exp(d10.summary$Cint.pred.mean + d10.summary$Cint.pred.se)
+d10.summary$Cint.pred.se.neg.bt <- exp(d10.summary$Cint.pred.mean - d10.summary$Cint.pred.se)
+
+str(d10.summary)
+
+p <- ggplot(d10.summary, aes(x = diversity, y = Cint.pred.mean.bt/1000, fill = temperature)) +
+  scale_fill_manual(values = c("white", "grey60")) +
+  geom_point(size = 1.5, shape = 21, position = position_dodge(0.9)) +
+  labs(x = "Genotypic Diversity", y = expression(italic(L.~zosterae)~cells~'*'~mg~dw^-1~x~1000)) + #'*'~mg~dw^-1~
+  geom_errorbar(aes(ymin = Cint.pred.se.neg.bt/1000, ymax = Cint.pred.se.pos.bt/1000), width = 0.15, position = position_dodge(0.9)) +
+  geom_violin(d10.sub.rwp1, mapping = aes(x = diversity, y = Cint.pred.bt/1000, fill = temperature), trim = T, scale = "width", alpha = 0.5) +
+  #coord_cartesian(ylim = c(0,1.25)) +
+  labs(fill = "Temperature treatment") +
+  theme_classic()
+p
+```
+
+##Labyrinthula cell intensity Expected vs. Observed by temperature
+###Data carpentry
+```{r}
+d11.1 <- d1 %>%
+  filter(diversity == "mono" & temperature != "pulse" & cells.per.mg > 0) %>%
+  filter(raceway.pair != "1") %>%
+  group_by(genotype, temperature, raceway.pair) %>%
+  dplyr::summarize(cells.exp = mean(cells.per.mg, na.rm = T))
+
+d11.2 <- d1 %>%
+  filter(diversity == "poly" & temperature != "pulse" & cells.per.mg != "NA") %>%
+  filter(raceway.pair != "1") %>%
+  filter(cells.per.mg > 0) %>%
+  dplyr::select(diversity, genotype, temperature, pot, raceway.pair, cells.per.mg)
+
+d11 <- merge(d11.2, d11.1, by = c("genotype", "temperature", "raceway.pair"), all.x = T)
+
+##Calculating missing expected values
+d10.1 <- d10 %>%
+  group_by(raceway.pair) %>%
+  dplyr::summarize(mean.cells.per.mg = mean(cells.per.mg, na.rm = T))
+#delta 2 vs. 3
+d.2.3 <- d10.1[2,2]/d10.1[3,2]
+d.2.4 <- d10.1[2,2]/d10.1[4,2]
+d.2.5 <- d10.1[2,2]/d10.1[5,2]
+d.5.4 <- d10.1[5,2]/d10.1[4,2]
+
+#RWP-2, Cold, Brown
+rwp2.c.brown.exp.3 <- d11.1[8,4] * d.2.3
+rwp2.c.brown.exp.4 <- d11.1[9,4] * d.2.4
+rwp2.c.brown.exp <- (rwp2.c.brown.exp.3 + rwp2.c.brown.exp.4)/2
+
+#RWP-2, Cold, Green
+rwp2.c.green.exp <- d11.1[14,4] * d.2.4
+
+#RWP-2, Cold, Red
+rwp2.c.red.exp.3 <- d11.1[34,4] * d.2.3
+rwp2.c.red.exp.4 <- d11.1[35,4] * d.2.4
+rwp2.c.red.exp.5 <- d11.1[36,4] * d.2.5
+rwp2.c.red.exp <- (rwp2.c.red.exp.3 + rwp2.c.red.exp.4 + rwp2.c.red.exp.5)/3
+
+#RWP-5, Cold, Green
+rwp5.c.green.exp <- d11.1[14,4] * d.5.4
+
+#Filling in NA cells in BWE.EO.merge
+d11[5,7] <- rwp2.c.brown.exp
+d11[9,7] <- rwp2.c.green.exp
+d11[11,7] <- rwp5.c.green.exp
+d11[22,7] <- rwp2.c.red.exp
+
+d11 <- d11 %>%
+  filter(cells.exp > 0) %>%
+  dplyr::group_by(diversity, pot, temperature, raceway.pair) %>%
+  dplyr::summarize(Cintensity.O = mean(cells.per.mg, na.rm = T),
+                   Cintensity.E = mean(cells.exp, na.rm = T))
+
+d11 <- gather(d11,
+                                key = "EO",
+                                value = "Cintensity",
+                                Cintensity.O, Cintensity.E)
+d11$Cintensity.round <- ceiling(d11$Cintensity)
+d11$interaction <- with(d11, interaction(temperature, EO))
+
+d11 <- as.data.frame(d11)
+str(d11)
+```
+
+###Analyses
+```{r}
+#models
+EOint.rwp <- glmer(Cintensity.round ~ EO * temperature + (1|raceway.pair),
+                  family = poisson(link = "log"),
+                  data = d11)
+plot(EOint.rwp)
+
+summary(EOint.rwp)
+Anova(EOint.rwp)
+
+EOint.rwp.null <- glmer(Cintensity.round ~ 1 + (1|raceway.pair),
+                       family = poisson(link = "log"),
+                       data = d11)
+
+EOint.rwp.a <- glmer(Cintensity.round ~ EO + (1|raceway.pair),
+                    family = poisson(link = "log"),
+                    data = d11)
+
+EOint.rwp.b <- glmer(Cintensity.round ~ temperature + (1|raceway.pair),
+                    family = poisson(link = "log"),
+                    data = d11)
+
+EOint.rwp.c <- glmer(Cintensity.round ~ EO + temperature + (1|raceway.pair),
+                    family = poisson(link = "log"),
+                    data = d11)
+
+#model simplification stepwise backwards-elimination proceedure
+#full model vs main effects model
+anova(EOint.rwp, EOint.rwp.c, test = "LR") #P<0.05
+
+#main effects model vs each main effect seperately
+anova(EOint.rwp.c, EOint.rwp.b, test = "LR") #P<0.05
+anova(EOint.rwp.c, EOint.rwp.a, test = "LR") #P<0.05
+
+
+##post-hoc analysis
+EOint.rwp.ph <- glmer(Cintensity.round ~ interaction + (1|raceway.pair),
+                     family = poisson(link = "log"),
+                     data = d11)
+summary(EOint.rwp.ph)
+
+summary(glht(EOint.rwp.ph, linfct = mcp(interaction="Tukey")))
+
+emm <- emmeans(EOint.rwp, ~EO|temperature)
+contrast(emm, method = "tukey")
+
+emm <- emmeans(EOint.rwp, ~temperature|EO)
+contrast(emm, method = "tukey")
+
+EOint.rwp.lsmo <- lsmeans::lsmeans(EOint.rwp, ~temperature:EO)
+EOint.rwp.cld <- cld(EOint.rwp.lsmo, adjust = 'tukey')
+EOint.rwp.cld
+```
+
+###Plots
+```{r}
+str(p0.EOint <- predict(EOint.rwp))
+
+d11$Cint.pred <- p0.EOint
+
+d11$Cint.pred.bt <- exp(d11$Cint.pred)
+
+d11.summary <- d11 %>%
+  dplyr::group_by(EO, temperature) %>%
+  dplyr::summarize(Cint.pred.mean = mean(Cint.pred), Cint.pred.se = se(Cint.pred))
+d11.summary$Cint.pred.mean.bt <- exp(d11.summary$Cint.pred.mean)
+d11.summary$Cint.pred.se.pos.bt <- exp(d11.summary$Cint.pred.mean + d11.summary$Cint.pred.se)
+d11.summary$Cint.pred.se.neg.bt <- exp(d11.summary$Cint.pred.mean - d11.summary$Cint.pred.se)
+
+p <- ggplot(d11.summary, aes(x = EO, y = Cint.pred.mean.bt/1000, fill = temperature)) +
+  scale_fill_manual(values = c("white", "grey60")) +
+  geom_point(size = 1.5, shape = 21, position = position_dodge(0.9)) +
+  labs(x = "Data set", y = expression(italic(L.~zosterae)~cells~'*'~mg~dw^-1~x~1000)) +
+  geom_errorbar(aes(ymin = Cint.pred.se.neg.bt/1000, ymax = Cint.pred.se.pos.bt/1000), width = 0.15, position = position_dodge(0.9)) +
+  geom_violin(d11, mapping = aes(x = EO, y = Cint.pred.bt/1000, fill = temperature), trim = T, scale = "width", alpha = 0.5) +
+  coord_cartesian(ylim = c(0,2)) +
+  labs(fill = "Temperature treatment") +
+  theme_classic()
+p
+```
+
+##Labyrinthula cell intensity by temperature and genotype
+###Data carpentry
+```{r}
+d12 <- d1 %>%
+  filter(diversity != "poly") %>%
+  filter(!is.na(cells.per.mg)) %>%
+  filter(cells.per.mg > 0) %>%
+  filter(genotype != "green") %>%
+  group_by(diversity, pot, temperature, genotype, bin, raceway.pair, raceway.position) %>%
+  dplyr::summarize(cells.per.mg = mean(cells.per.mg, na.rm = T))
+
+d12$Cintensity.round <- ceiling(d12$cells.per.mg)
+
+d12$raceway.group <- NA
+for (n in 1:55) {
+  if (d12$raceway.pair[n] == "1" | d12$raceway.pair[n] == "2" | d12$raceway.pair[n] == "3")
+  {d12$raceway.group[n] = "1" 
+  } else if (d12$raceway.pair[n] == "4" | d12$raceway.pair[n] == "5")
+    {d12$raceway.group[n] = "2" 
+  }
+}
+
+d12$raceway.group <- as.factor(d12$raceway.group)
+
+d12 <- as.data.frame(d12)
+
+str(d12)
+```
+
+###Analyses
+```{r}
+#models
+Cint.gen.m1 <- glm(Cintensity.round ~ temperature*genotype + raceway.group,
+                     family = poisson(link = "log"),
+                     data = filter(d12))
+                   
+plot(Cint.gen.m1)
+hist(residuals(Cint.gen.m1))
+coefplot(Cint.gen.m1)
+
+Anova(Cint.gen.m1)
+
+Cint.gen.null <- glm(Cintensity.round ~ 1 + raceway.group,
+                            family = poisson(link = "log"),
+                            data = d12)
+
+Cint.gen.m1a <- glm(Cintensity.round ~ temperature + raceway.group,
+                           family = poisson(link = "log"),
+                           data = d12)
+
+Cint.gen.m1b <- glm(Cintensity.round ~ genotype + raceway.group,
+                           family = poisson(link = "log"),
+                           data = d12)
+
+Cint.gen.m1c <- glm(Cintensity.round ~ temperature + genotype + raceway.group,
+                           family = poisson(link = "log"),
+                           data = d12)
+
+#model simplification stepwise backwards-elimination proceedure
+# full model vs main effects model
+anova(Cint.gen.m1, Cint.gen.m1c, test = "LR") #P<0.05
+
+#Post hoc
+Cint.gen.lsmo <- lsmeans::lsmeans(Cint.gen.m1, ~temperature:genotype)
+Cint.gen.cld <- cld(Cint.gen.lsmo, adjust = 'tukey')
+Cint.gen.cld
+
+emm <- emmeans(Cint.gen.m1, ~genotype|temperature)
+contrast(emm, method = "tukey")
+
+emm <- emmeans(Cint.gen.m1, ~temperature|genotype)
+contrast(emm, method = "tukey")
+```
+
+###Plots
+```{r}
+str(p0.Cint.gen <- predict(Cint.gen.m1))
+
+d12$Cint.gen.pred <- p0.Cint.gen
+
+hist(d12$Cint.gen.pred)
+
+d12.summary <- d12 %>%
+  dplyr::group_by(genotype, temperature) %>%
+  dplyr::summarize(Cint.gen.raw.mean = mean(log(Cintensity.round)), Cint.gen.raw.se = se(log(Cintensity.round)),
+    Cint.gen.pred.mean = mean(Cint.gen.pred), Cint.gen.pred.se = se(Cint.gen.pred))
+d12.summary$Cint.raw.mean.bt <- exp(d12.summary$Cint.gen.raw.mean)
+d12.summary$Cint.raw.se.pos.bt <- exp(d12.summary$Cint.gen.raw.mean + d12.summary$Cint.gen.raw.se)
+d12.summary$Cint.raw.se.neg.bt <- exp(d12.summary$Cint.gen.raw.mean - d12.summary$Cint.gen.raw.se)
+d12.summary$Cint.pred.mean.bt <- exp(d12.summary$Cint.gen.pred.mean)
+d12.summary$Cint.pred.se.pos.bt <- exp(d12.summary$Cint.gen.pred.mean + d12.summary$Cint.gen.pred.se)
+d12.summary$Cint.pred.se.neg.bt <- exp(d12.summary$Cint.gen.pred.mean - d12.summary$Cint.gen.pred.se)
+
+d12.summary <- as.data.frame(d12.summary)
+
+d12$Cint.gen.pred.bt <- exp(d12$Cint.gen.pred)
+
+d12.plot.pred <- d12 %>%
+  dplyr::select(temperature, genotype, Cint.gen.pred.bt) %>%
+  add_row(temperature = "ambient", genotype = "green", Cint.gen.pred.bt = 9000) %>%
+  add_row(temperature = "ambient", genotype = "green", Cint.gen.pred.bt = 9000) %>%
+  add_row(temperature = "ambient", genotype = "green", Cint.gen.pred.bt = 9000) %>%
+  add_row(temperature = "elevated", genotype = "green", Cint.gen.pred.bt = 9000) %>%
+  add_row(temperature = "elevated", genotype = "green", Cint.gen.pred.bt = 9000) %>%
+  add_row(temperature = "elevated", genotype = "green", Cint.gen.pred.bt = 9000) %>%
+  add_row(temperature = "ambient", genotype = "brown", Cint.gen.pred.bt = 128.263402) %>%
+  add_row(temperature = "ambient", genotype = "brown", Cint.gen.pred.bt = 151.736598)
+d12.plot.pred <- as.data.frame(d12.plot.pred)
+
+p <- ggplot(d12.summary, aes(x = genotype, y = Cint.pred.mean.bt/1000, fill = temperature)) +
+  scale_fill_manual(values = c("white", "grey60")) +
+  geom_violin(d12.plot.pred, mapping = aes(x = genotype, y = Cint.gen.pred.bt/1000, fill = temperature), trim = T, scale = "width") +
+  geom_point(size = 1.5, shape = 21, position = position_dodge(0.9)) +
+  labs(x = expression(italic(Z.~marina)~genotype), y = expression(italic(L.~zosterae)~cells~'*'~mg~dw^-1~x~1000)) +
+  geom_errorbar(aes(ymin = Cint.pred.se.neg.bt/1000, ymax = Cint.pred.se.pos.bt/1000), width = 0.15, position = position_dodge(0.9)) +
+  coord_cartesian(ylim = c(0,5)) +
+  labs(fill = "Temperature treatment") +
+  theme_classic()
+p
+```
+
+#Structural Equation Models
+##Growth mediate temperature-cell intensity relationship (susceptible genotypes)
+###Data carpentry
+```{r}
+
+d13 <- d1 %>%
+  filter(diversity != "poly") %>%
+  filter(genotype != "blue" & genotype != "green" & genotype != "purple") %>%
+  filter(cells.per.mg > 0) %>%
+  group_by(diversity, pot, temperature, genotype, bin) %>%
+  dplyr::summarize(Cintensity = mean(cells.per.mg, na.rm = T), growth = mean(growth.rate, na.rm = T)) %>%
+  mutate(Cintensity.round = ceiling(Cintensity)) %>%
+  mutate(Cintensity.round.log = log(Cintensity.round))
+
+d13 <- as.data.frame(d13)
+
+str(d13)
+str(d13$genotype)
+
+#scaling variables
+d13$growth.z <- scale(d13$growth, center = T, scale = T)
+str(d13)
+
+d13$temperature.2 <- NA
+for (n in 1:38) { 
+  if (d13$temperature[n] == "ambient")
+  {d13$temperature.2[n] = 0
+  } else {d13$temperature.2[n] = 1
+  }
+}
+
+str(d13)
+```
+
+###Analyses
+```{r}
+#testing for multivariate normality
+d13.1 <- d13 %>%
+  ungroup() %>%
+  dplyr::select(growth.z, Cintensity.round.log)
+mvn.result.ptc <- mvn(data = d13.1, mvnTest = "mardia")
+mvn.result.ptc$multivariateNormality #normal
+
+#model
+path1 <- '
+temperature.2 ~~ temperature.2
+growth.z ~~ growth.z
+
+#morphology effects
+Cintensity.round.log ~ d*growth.z
+
+#indirect effect, temperature * growth
+growth.z ~ g*temperature.2
+trt.gr := g*d
+
+#total effect
+total := (g*d)'
+
+fit.test.path1 <- sem(path1, data = d13)
+summary(fit.test.path1, standardized = TRUE, fit.measures = TRUE, rsq = TRUE)
+```
+
+###Plots
+```{r}
+#Diagnostic plots
+
+pval_raw <- 0.042
+
+#bootstrapping to improve fit of model
+(stat_obs <- fitMeasures(fit.test.path1, c("chisq")))
+set.seed(1)
+#to run the nonparametric yuan bootstrap method:
+boot_yuan <- bootstrapLavaan(fit.test.path1, R = 1000, type = "yuan", 
+                             FUN = fitMeasures, fit.measures = c("chisq"))
+# Compute the p-value with nonparametric bootstrap
+pval_yuan <- sum(boot_yuan >= stat_obs) / length(boot_yuan)
+# Inspect bootstrapped samples
+hist(boot_yuan)
+
+#to compute the observed vs expected correlation plots:
+#expected
+fit.test.path1.exp <- as.data.frame(lavInspect(fit.test.path1, "expected"))
+#observed
+fit.test.path1.obs <- as.data.frame(lavInspect(fit.test.path1, "sampstat"))
+#df for expected and observed covariance 
+fit.test.path1.covar <- data.frame(var = c("Cintensity_Cintensity",
+                                        "Cintensity_growth", "Cintensity_temperature",
+                                        "growth_Cintensity", "growth_growth",
+                                        "growth_temperature", "temperature_Cintensity", "temperature_growth",
+                                        "temperature_temperature"),
+                                observed = NA, expected = NA )
+#observed
+fit.test.path1.covar[1:3,2] <- t(fit.test.path1.obs[1,1:3])
+fit.test.path1.covar[4:6,2] <- t(fit.test.path1.obs[2,1:3])
+fit.test.path1.covar[7:9,2] <- t(fit.test.path1.obs[3,1:3])
+
+#expected
+fit.test.path1.covar[1:3,3] <- t(fit.test.path1.exp[1,1:3])
+fit.test.path1.covar[4:6,3] <- t(fit.test.path1.exp[2,1:3])
+fit.test.path1.covar[7:9,3] <- t(fit.test.path1.exp[3,1:3])
+
+pdf(file = "fit.test.path1_sem_model_diagnostics.pdf", width = 6, height = 6)
+par(pty = "s", tck = 0.02, mgp = c(1.5, 0.2, 0), mar = c(3, 2, 2, 1))
+plot(fit.test.path1.covar$observed, fit.test.path1.covar$expected, xlab = "Observed correlation",
+     ylab = "Predicted correlation", xlim = c(-1, 1), ylim = c(-1, 1), 
+     main = substitute(paste(chi^2 == chisq, ", ", p-value == pval, ", ", r^2 == rsq),
+                       list(chisq = format(stat_obs, dig = 3),
+                            pval = format(round(pval_yuan, dig = 3)),
+                            rsq = cor.test(fit.test.path1.covar$observed, 
+                                           fit.test.path1.covar$expected)$estimate^2, dig = 3)))
+abline(a = 0, b = 1, col = "black")
+
+dev.off()
+
+summary(lm(fit.test.path1.covar$observed ~ fit.test.path1.covar$expected))
+cor.test(fit.test.path1.covar$observed, 
+         fit.test.path1.covar$expected)$estimate^2
+```
+
+##Growth mediate temperature-cell intensity relationship (resistant genotypes)
+###Data carpentry
+```{r}
+d14 <- d1 %>%
+  filter(diversity != "poly") %>%
+  filter(genotype != "brown" & genotype != "green" & genotype != "orange" & genotype != "red" & genotype != "white" & genotype != "yellow") %>%
+  filter(cells.per.mg > 0) %>%
+  group_by(diversity, pot, temperature, genotype, bin) %>%
+  dplyr::summarize(Cintensity = mean(cells.per.mg, na.rm = T), growth = mean(growth.rate, na.rm = T)) %>%
+  mutate(Cintensity.round = ceiling(Cintensity)) %>%
+  mutate(Cintensity.round.log = log(Cintensity.round))
+
+d14 <- as.data.frame(d14)
+
+str(d14)
+
+###scaling variables
+d14$growth.z <- scale(d14$growth, center = T, scale = T)
+str(d14)
+
+d14$temperature.2 <- NA
+for (n in 1:17) { 
+  if (d14$temperature[n] == "ambient")
+  {d14$temperature.2[n] = 0
+  } else {d14$temperature.2[n] = 1
+  }
+}
+
+str(d14)
+```
+
+###Analyses
+```{r}
+#testing for multivariate normality
+d14.1 <- d14 %>%
+  ungroup() %>%
+  dplyr::select(growth.z, Cintensity.round.log)
+mvn.result.ptc <- mvn(data = d14.1, mvnTest = "mardia")
+mvn.result.ptc$multivariateNormality #normal
+
+#model
+path2 <- '
+temperature.2 ~~ temperature.2
+growth.z ~~ growth.z
+
+#morphology effects
+Cintensity.round.log ~ d*growth.z
+
+#indirect effect, temperature * growth
+growth.z ~ g*temperature.2
+trt.gr := g*d
+
+#total effect
+total := (g*d)' 
+
+fit.test.path2 <- sem(path2, data = d14)
+summary(fit.test.path2, standardized = TRUE, fit.measures = TRUE, rsq = TRUE)
+```
+
+###Plots
+```{r}
+#Diagnostic plots
+
+pval_raw <- 0.793
+
+###bootstrapping to improve fit of model
+(stat_obs <- fitMeasures(fit.test.path2, c("chisq")))
+set.seed(1)
+
+#to run the nonparametric yuan bootstrap method:
+boot_yuan <- bootstrapLavaan(fit.test.path2, R = 1000, type = "yuan", 
+                             FUN = fitMeasures, fit.measures = c("chisq"))
+
+# Compute the p-value with nonparametric bootstrap
+pval_yuan <- sum(boot_yuan >= stat_obs) / length(boot_yuan)
+
+# Inspect bootstrapped samples
+hist(boot_yuan)
+
+#to compute the observed vs expected correlation plots:
+#expected
+fit.test.path2.exp <- as.data.frame(lavInspect(fit.test.path2, "expected"))
+
+#observed
+fit.test.path2.obs <- as.data.frame(lavInspect(fit.test.path2, "sampstat"))
+
+#df for expected and observed covariance 
+fit.test.path2.covar <- data.frame(var = c("Cintensity_Cintensity",
+                                        "Cintensity_growth", "Cintensity_treatment",
+                                        "growth_Cintensity", "growth_growth",
+                                        "growth_temperature", "temperature_Cintensity", "temperature_growth",
+                                        "temperature_temperature"),
+                                observed = NA, expected = NA )
+#observed
+fit.test.path2.covar[1:3,2] <- t(fit.test.path2.obs[1,1:3])
+fit.test.path2.covar[4:6,2] <- t(fit.test.path2.obs[2,1:3])
+fit.test.path2.covar[7:9,2] <- t(fit.test.path2.obs[3,1:3])
+
+#expected
+fit.test.path2.covar[1:3,3] <- t(fit.test.path2.exp[1,1:3])
+fit.test.path2.covar[4:6,3] <- t(fit.test.path2.exp[2,1:3])
+fit.test.path2.covar[7:9,3] <- t(fit.test.path2.exp[3,1:3])
+
+
+summary(lm(fit.test.path2.covar$observed ~ fit.test.path2.covar$expected))
+rsq <- cor.test(fit.test.path2.covar$observed, 
+                fit.test.path2.covar$expected)$estimate^2
+
+#plotting the covariance against eachother:
+pdf(file = "fit.test.path2_sem_model_diagnostics.pdf", width = 6, height = 6)
+par(pty = "s", tck = 0.02, mgp = c(1.5, 0.2, 0), mar = c(3, 2, 2, 1))
+plot(fit.test.path2.covar$observed, fit.test.path2.covar$expected, xlab = "Observed correlation",
+     ylab = "Predicted correlation", xlim = c(-1, 1), ylim = c(-1, 1), 
+     main = substitute(paste(chi^2 == chisq, ", ", p-value == pval, ", ", r^2 == rsq),
+                       list(chisq = format(stat_obs, dig = 3),
+                            pval = format(round(pval_yuan, dig = 3)),
+                            rsq = format(rsq, dig = 3))))
+abline(a = 0, b = 1, col = "black")
+
+dev.off()
+```
+
+##Growth mediate temperature-lesion intensity relationship
+###Data carpentry
+```{r}
+d15 <- d1 %>%
+  filter(diversity != "poly") %>%
+  filter(lesion.cover > 0) %>%
+  group_by(diversity, pot, temperature, genotype, bin) %>%
+  dplyr::summarize(Lintensity = mean(lesion.cover, na.rm = T), growth = mean(growth.rate, na.rm = T)) %>%
+  mutate(Lintensity.sqrt = sqrt(Lintensity))
+
+d15 <-as.data.frame(d15)
+
+str(d15)
+
+###scaling variables
+d15$growth.z <- scale(d15$growth, center = T, scale = T)
+str(d15)
+
+d15$temperature.2 <- NA
+for (n in 1:80) { 
+  if (d15$temperature[n] == "ambient")
+  {d15$temperature.2[n] = 0
+  } else {d15$temperature.2[n] = 1
+  }
+}
+str(d15)
+```
+
+###Analyses
+```{r}
+#testing for multivariate normality
+d15.1 <- d15 %>%
+  ungroup() %>%
+  dplyr::select(growth.z, Lintensity.sqrt)
+mvn.result.ptc <- mvn(data = d15.1, mvnTest = "mardia")
+mvn.result.ptc$multivariateNormality
+
+hist(d15$Lintensity.sqrt)
+hist(d15$growth.z)
+
+#model
+path3 <- '
+temperature.2 ~~ temperature.2
+growth.z ~~ growth.z
+
+#morphology effects
+Lintensity.sqrt ~ d*growth.z
+
+#indirect effect, temperature * growth
+growth.z ~ g*temperature.2
+trt.gr := g*d
+
+#total effect
+total := (g*d)' 
+
+fit.test.path3 <- sem(path3, data = d15)
+summary(fit.test.path3, standardized = TRUE, fit.measures = TRUE, rsq = TRUE)
+```
+
+###Plots
+```{r}
+#diagnostic plots
+
+pval_raw <- 0.071
+
+###bootstrapping to improve fit of model
+(stat_obs <- fitMeasures(fit.test.path3, c("chisq")))
+set.seed(1)
+
+#to run the nonparametric yuan bootstrap method:
+boot_yuan <- bootstrapLavaan(fit.test.path3, R = 1000, type = "yuan", 
+                             FUN = fitMeasures, fit.measures = c("chisq"))
+
+# Compute the p-value with nonparametric bootstrap
+pval_yuan <- sum(boot_yuan >= stat_obs) / length(boot_yuan)
+
+# Inspect bootstrapped samples
+hist(boot_yuan)
+
+#to compute the observed vs expected correlation plots:
+#expected
+fit.test.path3.exp <- as.data.frame(lavInspect(fit.test.path3, "expected"))
+
+#observed
+fit.test.path3.obs <- as.data.frame(lavInspect(fit.test.path3, "sampstat"))
+
+#df for expected and observed covariance 
+fit.test.path3.covar <- data.frame(var = c("Lintensity_Lintensity",
+                                        "Lintensity_growth", "Lintensity_temperature",
+                                        "growth_Lintensity", "growth_growth",
+                                        "growth_temperature", "temperature_Lintensity", "temperature_growth",
+                                        "temperature_temperature"),
+                                observed = NA, expected = NA )
+#observed
+fit.test.path3.covar[1:3,2] <- t(fit.test.path3.obs[1,1:3])
+fit.test.path3.covar[4:6,2] <- t(fit.test.path3.obs[2,1:3])
+fit.test.path3.covar[7:9,2] <- t(fit.test.path3.obs[3,1:3])
+
+#expected
+fit.test.path3.covar[1:3,3] <- t(fit.test.path3.exp[1,1:3])
+fit.test.path3.covar[4:6,3] <- t(fit.test.path3.exp[2,1:3])
+fit.test.path3.covar[7:9,3] <- t(fit.test.path3.exp[3,1:3])
+
+#plotting the covariance against eachother:
+pdf(file = "fit.test.path3_sem_model_diagnostics.pdf", width = 6, height = 6)
+par(pty = "s", tck = 0.02, mgp = c(1.5, 0.2, 0), mar = c(3, 2, 2, 1))
+plot(fit.test.path3.covar$observed, fit.test.path3.covar$expected, xlab = "Observed correlation",
+     ylab = "Predicted correlation", xlim = c(-1, 1), ylim = c(-1, 1), 
+     main = substitute(paste(chi^2 == chisq, ", ", p-value == pval, ", ", r^2 == rsq),
+                       list(chisq = format(stat_obs, dig = 3),
+                            pval = format(round(pval_yuan, dig = 3)),
+                            rsq = cor.test(fit.test.path3.covar$observed, 
+                                           fit.test.path3.covar$expected)$estimate^2, dig = 3)))
+abline(a = 0, b = 1, col = "black")
+
+dev.off()
+
+summary(lm(fit.test.path3.covar$observed ~ fit.test.path3.covar$expected))
+cor.test(fit.test.path3.covar$observed, 
+         fit.test.path3.covar$expected)$estimate^2
+```
+
+
+##Length mediate temperature-cell prevalence relationship (susceptible genotypes)
+###Data carpentry
+```{r}
+d16 <- d1 %>%
+  filter(diversity != "poly") %>%
+  filter(genotype != "blue" & genotype != "orange" & genotype != "purple" & genotype != "red" & genotype != "white" & genotype != "yellow") %>%
+  group_by(diversity, pot, temperature, genotype, bin, raceway.pair) %>%
+  dplyr::summarize(length.mean = mean(length, na.rm = T), Cprevalence = mean(cells, na.rm = T), Cpresent = sum(cells, na.rm = T), Cabsent = sum(cells.absent, na.rm = T))
+
+d16$temperature.2 <- NA
+for (n in 1:20) {
+  if (d16$temperature[n] == "ambient")
+  {d16$temperature.2[n] = 0
+  } else {d16$temperature.2[n] = 1
+  }
+}
+
+###scaling variables
+d16$length.mean.z <- scale(d16$length.mean, center = T, scale = T)
+
+d16 <- as.data.frame(d16)
+
+str(d16)
+```
+
+###Analyses
+```{r}
+#testing for multivariate normality
+d16.1 <- d16 %>%
+  ungroup() %>%
+  dplyr::select(length.mean.z, Cprevalence)
+mvn.result.bpgCp <- mvn(data = d16.1, mvnTest = "mardia")
+mvn.result.bpgCp$multivariateNormality #normal
+
+#model
+path4 <- '
+#morphology effects
+Cprevalence ~ b*length.mean.z
+
+#indirect effect, temperature length
+length.mean.z ~ e*temperature.2
+trt.lt := e*b
+
+#total effect
+total := (e*b)'
+
+fit.test.path4 <- sem(path4, data = d16)
+summary(fit.test.path4, standardized = TRUE, fit.measures = TRUE, rsq = TRUE)
+```
+
+###Plots
+```{r}
+#diagnostic plot
+
+pval_raw <- 0.025
+
+###bootstrapping to improve fit of model
+(stat_obs <- fitMeasures(fit.test.path4, c("chisq")))
+set.seed(1)
+
+#to run the nonparametric yuan bootstrap method:
+boot_yuan <- bootstrapLavaan(fit.test.path4, R = 1000, type = "yuan", 
+                             FUN = fitMeasures, fit.measures = c("chisq"))
+
+# Compute the p-value with nonparametric bootstrap
+pval_yuan <- sum(boot_yuan >= stat_obs) / length(boot_yuan)
+
+# Inspect bootstrapped samples
+hist(boot_yuan, 
+     main = paste("Yuan bootstrap (p-value = ", round(pval_yuan, 3), ")",
+                  "; Chi Sq = ", round(stat_obs[1], 3), sep = ""))
+
+#to compute the observed vs expected correlation plots:
+#expected
+fit.test.path4.exp <- as.data.frame(lavInspect(fit.test.path4, "expected"))
+
+#observed
+fit.test.path4.obs <- as.data.frame(lavInspect(fit.test.path4, "sampstat"))
+
+#df for expected and observed covariance 
+fit.test.path4.covar <- data.frame(var = c("Cprevalence_Cprevalence", "Cprevalence_length.mean",
+                                        "Cprevalence_temperature", "length.mean_Cprevalence",
+                                        "length.mean_length.mean", "length.mean_temperature",
+                                        "temperature_Cprevalence", "temperature_length.mean",
+                                        "temperature_temperature"),
+                                observed = NA, expected = NA )
+#observed
+fit.test.path4.covar[1:3,2] <- t(fit.test.path4.obs[1,1:3])
+fit.test.path4.covar[4:6,2] <- t(fit.test.path4.obs[2,1:3])
+fit.test.path4.covar[7:9,2] <- t(fit.test.path4.obs[3,1:3])
+
+#expected
+fit.test.path4.covar[1:3,3] <- t(fit.test.path4.exp[1,1:3])
+fit.test.path4.covar[4:6,3] <- t(fit.test.path4.exp[2,1:3])
+fit.test.path4.covar[7:9,3] <- t(fit.test.path4.exp[3,1:3])
+
+summary(lm(fit.test.path4.covar$observed ~ fit.test.path4.covar$expected))
+rsq <- cor.test(fit.test.path4.covar$observed, 
+                fit.test.path4.covar$expected)$estimate^2
+rsq
+
+#plotting the covariance against eachother:
+pdf(file = "fit.test.path4_sem_model_diagnostics.pdf", width = 6, height = 6)
+par(pty = "s", tck = 0.02, mgp = c(1.5, 0.2, 0), mar = c(3, 2, 2, 1))
+plot(fit.test.path4.covar$observed, fit.test.path4.covar$expected, xlab = "Observed correlation",
+     ylab = "Predicted correlation", xlim = c(-1, 1), ylim = c(-1, 1), 
+     main = substitute(paste(chi^2 == chisq, ", ", p-value == pval, ", ", r^2 == rsq),
+                       list(chisq = format(stat_obs, dig = 3),
+                            pval = format(pval_yuan, dig = 3),
+                            rsq = format(rsq, dig = 3))))
+abline(a = 0, b = 1, col = "black")
+
+dev.off()
+```
+
+#Mesocosm temperature
+##Data import
+```{r}
+d17 <- read.csv("Schenck_etal_mesocosm_temperature_data.csv", header = TRUE)
+
+```
+
+##Data carpentry
+```{r}
+d17$sample.date <- as.Date(d17$date.time, format = '%m/%d/%y')
+
+d17 <- d17 %>% 
+  mutate(
+    yr = year(sample.date), 
+    mo = month(sample.date),
+    day = day(sample.date)) %>%
+  filter(temperature.treatment != "ALTERNATE") %>% #excluding alternate treatments
+  filter(temperature.treatment != "CG") %>% #excluding control
+  filter(mo < 10) #%>% #excluding days after wd collection
+
+d17 <- as.data.frame(d17)
+
+d17$jday <-lubridate::yday(d17$sample.date)
+
+d17 <- filter(d17, jday < 259)
+
+str(d17)
+```
+
+##Plots
+```{r}
+p <- ggplot(d17, aes(x = jday, y = temperature, group = bin)) +
+  geom_vline(xintercept = 201, linetype="dotted", 
+             color = "black") +
+  stat_summary(fun = mean, geom = "point", size = 2, aes(pch = bin, fill = temperature.treatment), position = position_dodge(0)) +
+  stat_summary(fun = mean, geom = "line", size = 0.5, aes(linetype = temperature.treatment), position = position_dodge(0)) +
+  stat_summary(fun.data = mean_se, geom = "errorbar", aes(colour = temperature.treatment), position = position_dodge(0), size = 0.5) +
+  scale_color_manual(values = c("black", "black")) +
+  scale_fill_manual(values = c("grey40", "grey40")) +
+  guides(color = FALSE, shape = FALSE, fill = FALSE, linetype = FALSE) +
+  scale_linetype_manual(values = c("dashed", "solid"), labels = c("Elevated", "Ambient")) +
+  scale_shape_manual(values = c(22,21,24,23,0,5,2,1,25,6), labels = c("1", "10", "12", "13", "14", "2", "4", "5", "8", "9")) +
+  labs(x = "Julien day", y = expression(paste("Seawater temperature ", "(", degree,"C", ")"))) +
+  coord_cartesian(ylim = c(10,22), xlim = c(180,260)) +
+  theme_classic()
+p
+```
+
+#qPCR inhibition
+##Data import
+```{r}
+d18 <- read.csv("Schenck_etal_qPCR_inhibition_data.csv")
+
+str(d18)
+```
+
+##Data carpentry
+```{r}
+d18 <- d18 %>%
+  filter(inhibition.cntrl.ID == "LF+Z 1:10") %>%
+  mutate(inhibition.delta = cells.uL.inhibition - cells.uL.pos.cntrl) %>%
+  mutate(inhibition.delta.percent = (inhibition.delta/cells.uL.pos.cntrl)*100)
+
+hist(inhib.analyses.d$inhibition.delta)
+
+d18.summary <- d18 %>%
+  group_by(inhibition.cntrl.ID) %>%
+  dplyr::summarize(inhib.delta.mean = mean(inhibition.delta, na.rm = T), inhib.delta.se = se(inhibition.delta, na.rm = T), inhib.delta.percent.mean = mean(inhibition.delta.percent, na.rm = T))
+```
+
+##Plots
+```{r}
+p <- ggplot(d18.summary, aes(x = inhibition.cntrl.ID, y = inhib.delta.mean)) +
+  scale_fill_manual(values = c("white")) +
+  geom_point(size = 3, shape = 21, color = "black", position = position_dodge(0.9)) +
+  labs(x = expression(italic(L.~zosterae)~cell~standard), y = expression(Inhibition~(italic(L.~zosterae)~cells~'*'~uL^-1))) +
+  geom_errorbar(aes(ymin = inhib.delta.mean-inhib.delta.se, ymax = inhib.delta.mean+inhib.delta.se), width = 0.15, position = position_dodge(0.9)) +
+  geom_point(d18, mapping = aes(x = inhibition.cntrl.ID, y = inhibition.delta), size = 0.5, alpha = 0.5) +
+  coord_cartesian(ylim = c(-50,50)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  theme_classic()
+p
+```
+
